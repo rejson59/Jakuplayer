@@ -10,6 +10,18 @@ npm start
 
 Aplikacja działa bez procesu budowania. Serwer nasłuchuje na porcie `3000` i udostępnia `index.html`.
 
+## Wtyczka Chrome / Edge
+
+Dla skuteczniejszej blokady repozytorium zawiera wtyczkę Manifest V3 w katalogu `extension/`. Działa ona również wewnątrz osadzonej ramki YouTube, do której skrypt samej strony nie ma dostępu. Blokuje typowe żądania reklamowe, pomija reklamy wideo, klika przyciski pomijania i ukrywa nakładki.
+
+Paczka `jakuplayer-adblock.zip` i strona `extension.html` z instrukcją są dostępne w opublikowanej aplikacji. Instrukcja znajduje się również w [`extension/README.md`](extension/README.md). Wtyczka wymaga jednorazowej instalacji przez każdego użytkownika; strona nie może zainstalować jej automatycznie.
+
+Aby odbudować paczkę po zmianach:
+
+```bash
+npm run package:extension
+```
+
 ## Ochrona przed reklamami
 
 `ad-blocker.js` wykrywa przerwy reklamowe przez zdarzenia odtwarzacza i kontrolę `getAdState()`. Po wykryciu reklamy:

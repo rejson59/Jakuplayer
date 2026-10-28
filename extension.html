@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pobierz i zainstaluj wtyczkę Jakuplayer Adblock dla Chrome i Edge.">
+    <title>Jakuplayer Adblock — Chrome i Edge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="min-h-screen bg-slate-950 text-white">
+    <main class="max-w-3xl mx-auto px-6 py-10 sm:py-16">
+        <a href="./" class="inline-flex items-center text-sm text-slate-400 hover:text-white mb-10">
+            <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Wróć do Jakuplayera
+        </a>
+
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl">
+            <div class="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center mb-6">
+                <i class="fas fa-shield-alt text-3xl" aria-hidden="true"></i>
+            </div>
+            <p class="text-blue-400 text-sm font-semibold uppercase tracking-wider mb-2">Chrome / Edge · Manifest V3</p>
+            <h1 class="text-3xl sm:text-4xl font-bold mb-4">Jakuplayer Adblock</h1>
+            <p class="text-slate-300 leading-relaxed mb-8">
+                Wtyczka blokuje typowe żądania reklamowe i pomija reklamy bezpośrednio w osadzonym odtwarzaczu YouTube. Wymaga jednorazowej, ręcznej instalacji.
+            </p>
+            <a href="jakuplayer-adblock.zip" download class="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-6 py-3 transition-colors">
+                <i class="fas fa-download mr-3" aria-hidden="true"></i> Pobierz wtyczkę ZIP
+            </a>
+
+            <h2 class="text-xl font-bold mt-10 mb-5">Instalacja</h2>
+            <ol class="space-y-4 text-slate-300">
+                <li class="flex gap-4"><span class="flex-none w-7 h-7 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center font-bold">1</span><span>Pobierz i rozpakuj paczkę ZIP.</span></li>
+                <li class="flex gap-4"><span class="flex-none w-7 h-7 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center font-bold">2</span><span>Otwórz <code class="text-white">chrome://extensions</code> w Chrome albo <code class="text-white">edge://extensions</code> w Edge.</span></li>
+                <li class="flex gap-4"><span class="flex-none w-7 h-7 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center font-bold">3</span><span>Włącz <strong class="text-white">Tryb dewelopera</strong>.</span></li>
+                <li class="flex gap-4"><span class="flex-none w-7 h-7 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center font-bold">4</span><span>Kliknij <strong class="text-white">Załaduj rozpakowane</strong> i wybierz katalog <code class="text-white">jakuplayer-adblock</code> zawierający <code class="text-white">manifest.json</code>.</span></li>
+                <li class="flex gap-4"><span class="flex-none w-7 h-7 rounded-full bg-slate-800 text-blue-400 flex items-center justify-center font-bold">5</span><span>Odśwież otwartą stronę Jakuplayera.</span></li>
+            </ol>
+
+            <div class="mt-10 rounded-xl bg-slate-950 border border-slate-800 p-5 text-sm text-slate-400 leading-relaxed">
+                <h2 class="text-white font-semibold mb-2">Aktualizacje i ograniczenia</h2>
+                <p>Po pobraniu nowszej paczki zastąp pliki i kliknij <strong class="text-slate-200">Przeładuj</strong> na karcie rozszerzenia. YouTube może zmienić odtwarzacz lub sposób dostarczania reklam, więc działanie bez aktualizacji nie jest gwarantowane. Segmenty sponsorskie nagrane w samym filmie nie są usuwane.</p>
+                <p class="mt-3">Bez wtyczki wbudowana w stronę blokada nadal działa jako dodatkowe zabezpieczenie.</p>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
