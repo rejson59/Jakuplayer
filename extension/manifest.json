@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Jakuplayer Adblock",
+  "short_name": "Jaku Adblock",
+  "version": "1.0.0",
+  "description": "Blokuje i pomija reklamy w osadzonym odtwarzaczu YouTube używanym przez Jakuplayera.",
+  "minimum_chrome_version": "110",
+  "permissions": [
+    "declarativeNetRequest"
+  ],
+  "action": {
+    "default_title": "Jakuplayer Adblock",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/embed/*",
+        "https://www.youtube-nocookie.com/embed/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "jakuplayer_ad_rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}
