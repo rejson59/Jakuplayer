@@ -21,8 +21,9 @@
      * Best-effort ad protection for the cross-origin YouTube IFrame API.
      *
      * The parent page cannot remove nodes or network requests inside YouTube's
-     * iframe. It can, however, subscribe to ad events, mute immediately and
-     * seek to the end of an ad when the player exposes its duration.
+     * iframe. It can, however, subscribe to ad events, mute immediately,
+     * seek to the end of an ad and resume the content without waiting when
+     * the player does not expose a safe ad duration.
      */
     class YouTubeAdBlocker {
         constructor(options = {}) {
@@ -34,26 +35,36 @@
             this.lastContentDuration = 0;
             this.volumeBeforeAd = 80;
             this.mutedBeforeAd = false;
+            this.playbackRateBeforeAd = 1;
             this.lastSkipAttempt = -Infinity;
             this.skipAttempts = 0;
             this.skipNotified = false;
+            this.resumeAttempts = 0;
+            this.resumeTimer = null;
+            this.contentPlayingSince = null;
             this.timer = null;
             this.listeners = [];
 
             this.pollInterval = options.pollInterval || 250;
             this.maxSkipAttempts = options.maxSkipAttempts || 20;
+            this.maxResumeAttempts = options.maxResumeAttempts ?? 1;
+            this.resumeDelay = options.resumeDelay ?? 500;
             this.now = options.now || (() => Date.now());
             this.setInterval = options.setInterval || globalThis.setInterval.bind(globalThis);
             this.clearInterval = options.clearInterval || globalThis.clearInterval.bind(globalThis);
+            this.setTimeout = options.setTimeout || globalThis.setTimeout.bind(globalThis);
+            this.clearTimeout = options.clearTimeout || globalThis.clearTimeout.bind(globalThis);
             this.onAdStart = options.onAdStart || (() => {});
             this.onAdEnd = options.onAdEnd || (() => {});
             this.onSkip = options.onSkip || (() => {});
+            this.onResume = options.onResume || (() => {});
 
             this.check = this.check.bind(this);
         }
 
         attach(player) {
             this.detach();
+            if (!player) return;
             this.player = player;
 
             const handlers = {
@@ -82,6 +93,7 @@
         }
 
         detach() {
+            this.clearResumeTimer();
             if (this.timer !== null) {
                 this.clearInterval(this.timer);
                 this.timer = null;
@@ -103,6 +115,7 @@
         }
 
         setVideo(videoId) {
+            this.clearResumeTimer();
             if (this.adActive) {
                 this.endAd();
             }
@@ -114,6 +127,8 @@
             this.skipAttempts = 0;
             this.skipNotified = false;
             this.lastSkipAttempt = -Infinity;
+            this.resumeAttempts = 0;
+            this.contentPlayingSince = null;
         }
 
         setPreferredVolume(volume) {
@@ -203,6 +218,20 @@
             if (Number.isFinite(duration) && duration > 0) {
                 this.lastContentDuration = duration;
             }
+
+            // Allow one fresh recovery attempt for later mid-roll breaks, but
+            // only after real content has played continuously for a while.
+            const playerState = Number(this.read('getPlayerState', NaN));
+            if (playerState === 1 && currentTime > 0) {
+                const timestamp = this.now();
+                if (this.contentPlayingSince === null) {
+                    this.contentPlayingSince = timestamp;
+                } else if (timestamp - this.contentPlayingSince >= 4000) {
+                    this.resumeAttempts = 0;
+                }
+            } else {
+                this.contentPlayingSince = null;
+            }
         }
 
         check() {
@@ -236,6 +265,8 @@
                 this.adActive = true;
                 this.volumeBeforeAd = finiteNumber(this.read('getVolume', this.volumeBeforeAd), 80);
                 this.mutedBeforeAd = Boolean(this.read('isMuted', false));
+                this.playbackRateBeforeAd = Math.max(0.25, finiteNumber(this.read('getPlaybackRate', 1), 1));
+                this.contentPlayingSince = null;
                 this.skipAttempts = 0;
                 this.skipNotified = false;
 
@@ -255,6 +286,96 @@
             }
 
             this.skipAd();
+            this.speedUpAd();
+            this.scheduleContentResume();
+        }
+
+        speedUpAd() {
+            if (!this.adActive || !this.player || typeof this.player.setPlaybackRate !== 'function') {
+                return false;
+            }
+
+            const availableRates = this.read('getAvailablePlaybackRates', null);
+            let playbackRate = 2;
+            if (Array.isArray(availableRates)) {
+                const supportedRates = availableRates.map(Number)
+                    .filter((rate) => Number.isFinite(rate) && rate > 1 && rate <= 16);
+                if (!supportedRates.length) return false;
+                playbackRate = Math.max(...supportedRates);
+            }
+
+            if (Math.abs(finiteNumber(this.read('getPlaybackRate', 1), 1) - playbackRate) < 0.01) {
+                return true;
+            }
+
+            try {
+                this.player.setPlaybackRate(playbackRate);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        clearResumeTimer() {
+            if (this.resumeTimer !== null) {
+                this.clearTimeout(this.resumeTimer);
+                this.resumeTimer = null;
+            }
+        }
+
+        scheduleContentResume() {
+            if (!this.adActive || !this.player || !this.videoId || this.resumeTimer !== null) return;
+            if (this.resumeAttempts >= this.maxResumeAttempts) return;
+            if (typeof this.player.loadVideoById !== 'function') return;
+
+            this.resumeTimer = this.setTimeout(() => {
+                this.resumeTimer = null;
+                if (this.adActive) this.resumeContent();
+            }, this.resumeDelay);
+        }
+
+        resumeContent() {
+            if (!this.adActive || !this.player || !this.videoId) return false;
+            if (this.resumeAttempts >= this.maxResumeAttempts) return false;
+            if (typeof this.player.loadVideoById !== 'function') return false;
+
+            const targetPlayer = this.player;
+            const startSeconds = Math.max(0, finiteNumber(this.lastContentTime, 0));
+            this.resumeAttempts += 1;
+
+            // Keep the break marked as active until YouTube confirms its end.
+            // A late ENDED event from the old ad must not advance the app's
+            // music queue while the content is being loaded again.
+            this.clearResumeTimer();
+            this.adDuration = 0;
+            this.contentPlayingSince = null;
+            this.lastSkipAttempt = -Infinity;
+            this.skipAttempts = 0;
+
+            // The new content must never inherit the accelerated ad rate.
+            try {
+                if (typeof targetPlayer.setPlaybackRate === 'function') {
+                    targetPlayer.setPlaybackRate(this.playbackRateBeforeAd);
+                }
+            } catch (_) {
+                // endAd() will retry restoring the original rate.
+            }
+
+            try {
+                targetPlayer.loadVideoById({
+                    videoId: this.videoId,
+                    startSeconds
+                });
+                try {
+                    this.onResume();
+                } catch (_) {
+                    // Status callbacks must not affect playback.
+                }
+                return true;
+            } catch (_) {
+                if (this.player === targetPlayer) this.startAd();
+                return false;
+            }
         }
 
         getSeekableAdDuration() {
@@ -321,6 +442,7 @@
         }
 
         endAd() {
+            this.clearResumeTimer();
             if (!this.adActive) {
                 return;
             }
@@ -329,6 +451,14 @@
             this.adDuration = 0;
 
             if (this.player) {
+                try {
+                    if (typeof this.player.setPlaybackRate === 'function') {
+                        this.player.setPlaybackRate(this.playbackRateBeforeAd);
+                    }
+                } catch (_) {
+                    // The embed may already have been replaced or destroyed.
+                }
+
                 try {
                     if (this.mutedBeforeAd) {
                         if (typeof this.player.mute === 'function') {

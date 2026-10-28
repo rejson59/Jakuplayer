@@ -16,10 +16,12 @@ Aplikacja działa bez procesu budowania. Serwer nasłuchuje na porcie `3000` i u
 
 - natychmiast wycisza dźwięk,
 - próbuje przewinąć reklamę do końca, jeżeli YouTube udostępnia bezpieczną informację o jej długości,
-- przywraca poprzednią głośność i stan wyciszenia,
+- gdy przewinięcie nie jest możliwe, po 500 ms ponownie ładuje właściwy utwór od zapamiętanego miejsca zamiast czekać na koniec przerwy,
+- ogranicza liczbę takich prób, aby YouTube nie mógł wywołać pętli przeładowań; po ustabilizowaniu odtwarzania zabezpieczenie może ponownie obsłużyć reklamy w środku utworu,
+- przyspiesza reklamę do najwyższej prędkości zgłaszanej przez odtwarzacz, a następnie przywraca normalną prędkość, głośność i stan wyciszenia,
 - nie traktuje zakończenia reklamy jako zakończenia utworu.
 
-Jest to ochrona na poziomie odtwarzacza, a nie sieciowy adblock. Ze względu na izolację iframe YouTube może nie zezwolić na pominięcie każdej reklamy; wtedy pozostaje ona wyciszona do zakończenia przerwy.
+Jest to ochrona na poziomie odtwarzacza, a nie sieciowy adblock. Ze względu na izolację iframe YouTube może ponowić reklamę lub zablokować jej przewijanie i przyspieszanie. Wtedy reklama pozostaje wyciszona, a zabezpieczenie przed pętlą przeładowań ma pierwszeństwo przed kolejną próbą.
 
 ## Testy
 

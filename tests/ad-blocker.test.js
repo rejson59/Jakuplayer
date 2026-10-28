@@ -14,6 +14,10 @@ class FakePlayer {
         this.duration = 200;
         this.seekCalls = [];
         this.setVolumeCalls = [];
+        this.loadCalls = [];
+        this.playbackRate = 1;
+        this.playbackRateCalls = [];
+        this.availablePlaybackRates = [0.5, 1, 1.5, 2];
     }
 
     addEventListener(name, handler) {
@@ -40,20 +44,33 @@ class FakePlayer {
     unMute() { this.muted = false; }
     setVolume(value) { this.volume = value; this.setVolumeCalls.push(value); }
     seekTo(value, allowSeekAhead) { this.seekCalls.push([value, allowSeekAhead]); }
+    getPlaybackRate() { return this.playbackRate; }
+    setPlaybackRate(value) { this.playbackRate = value; this.playbackRateCalls.push(value); }
+    getAvailablePlaybackRates() { return this.availablePlaybackRates; }
+    loadVideoById(options) { this.loadCalls.push(options); }
 }
 
 function createHarness(player = new FakePlayer()) {
     let now = 1000;
     let callback = null;
     let cleared = false;
+    let timeoutId = 0;
+    const timeouts = new Map();
     const events = [];
     const blocker = new YouTubeAdBlocker({
         now: () => now,
         setInterval: (fn) => { callback = fn; return 1; },
         clearInterval: () => { cleared = true; },
+        setTimeout: (fn, delay) => {
+            timeoutId += 1;
+            timeouts.set(timeoutId, { fn, delay });
+            return timeoutId;
+        },
+        clearTimeout: (id) => timeouts.delete(id),
         onAdStart: () => events.push('start'),
         onAdEnd: () => events.push('end'),
-        onSkip: () => events.push('skip')
+        onSkip: () => events.push('skip'),
+        onResume: () => events.push('resume')
     });
 
     return {
@@ -62,6 +79,12 @@ function createHarness(player = new FakePlayer()) {
         events,
         tick(ms = 250) { now += ms; callback?.(); },
         advance(ms) { now += ms; },
+        runTimeouts() {
+            const pending = [...timeouts.values()];
+            timeouts.clear();
+            pending.forEach(({ fn }) => fn());
+        },
+        get pendingTimeouts() { return [...timeouts.values()]; },
         get cleared() { return cleared; }
     };
 }
@@ -200,6 +223,95 @@ test('polling detects an ad when no ad start event is emitted', () => {
     assert.equal(harness.blocker.isAdActive(), true);
     assert.equal(player.muted, true);
     assert.deepEqual(player.seekCalls, [[7.95, true]]);
+});
+
+test('cancels fallback reload after a successful ad skip', () => {
+    const player = new FakePlayer();
+    const harness = createHarness(player);
+    harness.blocker.attach(player);
+    harness.blocker.setVideo('song-id');
+
+    player.adState = 1;
+    player.emit('onAdStart', { duration: 10 });
+    assert.equal(harness.pendingTimeouts.length, 1);
+
+    player.adState = 0;
+    player.emit('onAdEnd');
+    assert.equal(harness.pendingTimeouts.length, 0);
+    harness.runTimeouts();
+    assert.equal(player.loadCalls.length, 0);
+    assert.equal(player.playbackRate, 1);
+});
+
+test('quickly resumes content from the saved position when an ad cannot be seeked', () => {
+    const player = new FakePlayer();
+    player.currentTime = 42;
+    player.duration = 200;
+    const harness = createHarness(player);
+    harness.blocker.attach(player);
+    harness.blocker.setVideo('song-id');
+    harness.blocker.check();
+
+    player.adState = 1;
+    player.emit('onAdStart');
+    assert.equal(player.muted, true);
+    assert.equal(player.playbackRate, 2, 'the ad should use the fastest supported rate');
+    assert.equal(harness.pendingTimeouts[0].delay, 500);
+
+    harness.advance(500);
+    harness.runTimeouts();
+    assert.deepEqual(player.loadCalls, [{ videoId: 'song-id', startSeconds: 42 }]);
+    assert.equal(harness.blocker.isAdActive(), true, 'stay protected until YouTube confirms the ad ended');
+
+    player.adState = 0;
+    harness.blocker.check();
+    assert.equal(harness.blocker.isAdActive(), false);
+    assert.equal(player.muted, false);
+    assert.equal(player.playbackRate, 1, 'content must return to its original speed');
+    assert.deepEqual(harness.events, ['start', 'resume', 'end']);
+});
+
+test('recovers from a pre-roll without waiting for its duration', () => {
+    const player = new FakePlayer();
+    player.duration = 95;
+    const harness = createHarness(player);
+    harness.blocker.attach(player);
+    harness.blocker.setVideo('pre-roll-song');
+
+    player.adState = 1;
+    player.emit('onAdStart');
+    assert.equal(player.seekCalls.length, 0, 'unknown duration must not cause a content seek');
+
+    harness.advance(500);
+    harness.runTimeouts();
+    assert.deepEqual(player.loadCalls, [{ videoId: 'pre-roll-song', startSeconds: 0 }]);
+});
+
+test('does not enter a reload loop when YouTube repeats the ad', () => {
+    const player = new FakePlayer();
+    player.currentTime = 30;
+    const harness = createHarness(player);
+    harness.blocker.attach(player);
+    harness.blocker.setVideo('song-id');
+    harness.blocker.check();
+
+    player.adState = 1;
+    player.emit('onAdStart');
+    harness.advance(500);
+    harness.runTimeouts();
+    assert.equal(player.loadCalls.length, 1);
+
+    player.emit('onAdStart');
+    harness.advance(500);
+    harness.runTimeouts();
+    assert.equal(player.loadCalls.length, 1, 'a repeated ad must not trigger another immediate reload');
+    assert.equal(player.muted, true);
+    assert.equal(player.playbackRate, 2);
+
+    player.adState = 0;
+    player.emit('onAdEnd');
+    assert.equal(player.muted, false);
+    assert.equal(player.playbackRate, 1);
 });
 
 test('detach removes listeners and stops polling', () => {
