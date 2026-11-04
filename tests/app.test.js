@@ -312,3 +312,87 @@ test('shows a useful error instead of crashing on an API error response', async 
     await app.api.searchYouTube('test');
     assert.match(app.window.document.getElementById('search-results').textContent, /Wystąpił błąd podczas wyszukiwania/);
 });
+
+test('first-time guest can immediately play starter tracks without logging in', async (t) => {
+    const app = createApp({ storage: {}, autoReady: false });
+    closeApp(t, app);
+    const doc = app.window.document;
+    assert.equal(doc.querySelectorAll('#search-results .song-card').length, 6);
+    assert.equal(doc.getElementById('welcome-page').classList.contains('hidden'), false);
+    doc.getElementById('mobile-play-button').click();
+    assert.equal(doc.getElementById('home-page').classList.contains('hidden'), false);
+    assert.match(doc.getElementById('current-song-title').textContent, /lofi hip hop radio/i);
+    assert.deepEqual(app.players[0].loadCalls, []);
+    app.players[0].ready();
+    assert.deepEqual(app.players[0].loadCalls, ['jfKfPfyJRdk']);
+    assert.equal(doc.getElementById('account-modal').classList.contains('open'), false);
+});
+
+test('search form, quick categories and direct YouTube links work for guests', async (t) => {
+    const urls = [];
+    const app = createApp({ fetch: async (url) => {
+        urls.push(url);
+        return { ok: true, json: async () => ({ items: [searchItem('result-id', 'Search result')] }) };
+    } });
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    const input = doc.getElementById('search-input');
+    input.value = 'przykładowy utwór';
+    doc.getElementById('search-button').click();
+    await app.ready();
+    assert.match(urls[0], /przyk%C5%82adowy%20utw%C3%B3r/);
+    assert.equal(doc.querySelector('#search-results h4').textContent, 'Search result');
+    doc.querySelector('[data-quick-search]').click();
+    await app.ready();
+    assert.match(urls[1], /Polskie%20hity/);
+    input.value = 'https://youtu.be/K4DyBUG242c?t=1';
+    doc.getElementById('search-button').click();
+    assert.equal(urls.length, 2, 'direct link must not use the search API');
+    assert.deepEqual(app.players[0].loadCalls, ['K4DyBUG242c']);
+    assert.equal(doc.querySelectorAll('#search-results .song-card').length, 1);
+    doc.getElementById('starter-tracks-button').click();
+    assert.equal(doc.querySelectorAll('#search-results .song-card').length, 6);
+});
+
+test('late search results do not overwrite a direct link or restored starter tracks', async (t) => {
+    let resolveFetch;
+    const app = createApp({ fetch: () => new Promise((resolve) => { resolveFetch = resolve; }) });
+    closeApp(t, app);
+    await app.ready();
+    const oldSearch = app.api.searchYouTube('old search');
+    await app.api.searchYouTube('https://www.youtube.com/watch?v=K4DyBUG242c');
+    resolveFetch({ ok: true, json: async () => ({ items: [searchItem('stale-id', 'Stale')] }) });
+    await oldSearch;
+    assert.match(app.window.document.querySelector('#search-results h4').textContent, /K4DyBUG242c/);
+    const anotherSearch = app.api.searchYouTube('another search');
+    app.window.document.getElementById('starter-tracks-button').click();
+    resolveFetch({ ok: true, json: async () => ({ items: [searchItem('stale-id', 'Stale')] }) });
+    await anotherSearch;
+    assert.equal(app.window.document.querySelectorAll('#search-results .song-card').length, 6);
+});
+
+test('mobile player avoids widget overlap and playback controls stay in sync', async (t) => {
+    const app = createApp();
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    assert.match(html, /--rj-mobile-ads-height:\s*92px/);
+    doc.getElementById('mobile-song-info').click();
+    assert.equal(doc.documentElement.style.getPropertyValue('--rj-mobile-ads-height'), '184px');
+    doc.getElementById('mobile-shuffle-button').click();
+    assert.equal(doc.getElementById('shuffle-button').getAttribute('aria-pressed'), 'true');
+    assert.match(doc.getElementById('toast').textContent, /włączone/);
+    doc.getElementById('repeat-button').click();
+    assert.equal(doc.getElementById('mobile-repeat-button').getAttribute('aria-pressed'), 'true');
+    doc.getElementById('mobile-song-info').click();
+    assert.equal(doc.documentElement.style.getPropertyValue('--rj-mobile-ads-height'), '92px');
+    doc.getElementById('mobile-prev-button').click();
+    assert.match(doc.getElementById('toast').textContent, /wybierz utwór/);
+    doc.getElementById('mobile-shuffle-button').click();
+    doc.getElementById('mobile-next-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['jfKfPfyJRdk']);
+    doc.getElementById('next-button').click();
+    doc.getElementById('prev-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['jfKfPfyJRdk', '4xDzrJKXOOY', 'jfKfPfyJRdk']);
+});

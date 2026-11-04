@@ -8,6 +8,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            /* Odsuń pigułkę rejson-widgets ponad dolny pasek odtwarzacza, aby nie zasłaniała przycisków */
+            --rj-mobile-ads-height: 92px;
+        }
         
         body {
             font-family: 'Poppins', sans-serif;
@@ -209,7 +214,8 @@
             }
             
             .search-input-container {
-                width: calc(100% - 80px);
+                width: 100%;
+                min-width: 0;
             }
         }
         
@@ -452,31 +458,31 @@
     </div>
 
     <!-- Playlist Modal -->
-    <div id="playlist-modal" class="playlist-modal fixed inset-0 flex items-center justify-center z-50">
+    <div id="playlist-modal" class="playlist-modal fixed inset-0 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
         <div class="absolute inset-0 bg-black/70"></div>
         <div class="bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 relative z-10 slide-up max-h-[80vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Dodaj do playlisty</h2>
-                <button id="close-playlist-modal" class="text-slate-400 hover:text-white">
+                <h2 id="playlist-modal-title" class="text-xl font-bold">Dodaj do playlisty</h2>
+                <button id="close-playlist-modal" type="button" class="text-slate-400 hover:text-white" aria-label="Zamknij okno playlist">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div id="playlist-modal-content" class="space-y-2">
                 <!-- Playlists will be loaded here -->
             </div>
-            <button id="create-new-playlist-button" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+            <button id="create-new-playlist-button" type="button" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
                 <i class="fas fa-plus mr-2"></i> Nowa playlista
             </button>
         </div>
     </div>
 
     <!-- Playlist Detail Modal -->
-    <div id="playlist-detail-modal" class="playlist-modal fixed inset-0 flex items-center justify-center z-50">
+    <div id="playlist-detail-modal" class="playlist-modal fixed inset-0 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="playlist-detail-title">
         <div class="absolute inset-0 bg-black/70"></div>
         <div class="bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 relative z-10 slide-up max-h-[80vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h2 id="playlist-detail-title" class="text-xl font-bold">Playlista</h2>
-                <button id="close-playlist-detail-modal" class="text-slate-400 hover:text-white">
+                <button id="close-playlist-detail-modal" type="button" class="text-slate-400 hover:text-white" aria-label="Zamknij szczegóły playlisty">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -484,10 +490,10 @@
                 <!-- Playlist songs will be loaded here -->
             </div>
             <div class="flex space-x-2 mt-4">
-                <button id="delete-playlist-button" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+                <button id="delete-playlist-button" type="button" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
                     <i class="fas fa-trash mr-2"></i> Usuń
                 </button>
-                <button id="edit-playlist-button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+                <button id="edit-playlist-button" type="button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
                     <i class="fas fa-edit mr-2"></i> Edytuj
                 </button>
             </div>
@@ -656,19 +662,24 @@
         <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Header -->
             <header class="bg-slate-900 p-4 flex items-center justify-between gap-3">
-                <div class="flex items-center space-x-4 flex-1 min-w-0">
-                    <button id="mobile-menu-button" class="md:hidden text-slate-300 shrink-0" aria-label="Otwórz menu">
+                <div class="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                    <button id="mobile-menu-button" type="button" class="md:hidden text-slate-300 hover:text-white p-1 shrink-0" aria-label="Otwórz menu">
                         <i class="fas fa-bars text-xl"></i>
                     </button>
-                    <div class="relative search-input-container flex-1 max-w-xl">
+                    <form id="search-form" role="search" class="relative search-input-container flex-1 max-w-xl">
                         <input 
-                            type="text" 
+                            type="search"
                             id="search-input" 
-                            placeholder="Wyszukaj utwory, artystów..." 
-                            class="w-full bg-slate-800 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            enterkeyhint="search"
+                            autocomplete="off"
+                            placeholder="Wyszukaj utwory, artystów lub wklej link YouTube..."
+                            class="w-full bg-slate-800 text-white rounded-full py-2 pl-10 pr-20 sm:pr-24 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                         >
-                        <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
-                    </div>
+                        <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" aria-hidden="true"></i>
+                        <button id="search-button" type="submit" class="absolute right-1.5 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-full px-3 py-1.5 transition-colors" aria-label="Szukaj muzyki">
+                            Szukaj
+                        </button>
+                    </form>
                 </div>
                 
                 <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
@@ -693,44 +704,48 @@
             <!-- Content -->
             <main class="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-900 to-slate-800 player-controls">
                 <!-- Non-mandatory Cloud Sync Encouragement Banner (for guests) -->
-                <section id="sync-promo-banner" aria-label="Synchronizacja z kontem" class="mb-6 rounded-xl bg-gradient-to-r from-blue-950/90 via-slate-800/95 to-slate-800/90 border border-blue-800/60 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div class="flex items-start gap-3 min-w-0">
-                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center shrink-0 mt-0.5">
-                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+                <section id="sync-promo-banner" aria-label="Synchronizacja z kontem" class="mb-6 rounded-xl bg-gradient-to-r from-blue-950/90 via-slate-800/95 to-slate-800/90 border border-blue-800/60 p-4">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center shrink-0 mt-0.5">
+                                <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h2 class="text-sm font-semibold text-white">Zachowaj swoją bibliotekę między urządzeniami (opcjonalnie)</h2>
+                                <p id="sync-promo-text" class="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                                    Możesz słuchać bez logowania. Zaloguj się przez rejson59.github.io, aby zapisać swoje polubione utwory, playlisty i historię oraz przenosić je na inne urządzenia.
+                                </p>
+                            </div>
                         </div>
-                        <div class="min-w-0">
-                            <h2 class="text-sm font-semibold text-white">Zachowaj swoją bibliotekę między urządzeniami (opcjonalnie)</h2>
-                            <p id="sync-promo-text" class="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                                Możesz słuchać bez logowania. Zaloguj się przez rejson59.github.io, aby zapisać swoje polubione utwory, playlisty i historię oraz przenosić je na inne urządzenia.
-                            </p>
+                        <div class="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                            <button id="banner-connect-button" type="button" data-account-connect class="rejson-login-btn py-2 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-2">
+                                <span>Zaloguj się przez rejson59.github.io</span>
+                                <span aria-hidden="true">↗</span>
+                            </button>
+                            <button id="dismiss-sync-promo" type="button" class="text-slate-400 hover:text-white p-2 rounded-lg" aria-label="Ukryj zachętę na czas tej wizyty" title="Ukryj na czas wizyty">
+                                <i class="fas fa-times" aria-hidden="true"></i>
+                            </button>
                         </div>
-                    </div>
-                    <div class="flex items-center gap-2 shrink-0 self-end lg:self-center">
-                        <button id="banner-connect-button" type="button" data-account-connect class="rejson-login-btn py-2 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-2">
-                            <span>Zaloguj się przez rejson59.github.io</span>
-                            <span aria-hidden="true">↗</span>
-                        </button>
-                        <button id="dismiss-sync-promo" type="button" class="text-slate-400 hover:text-white p-2 rounded-lg" aria-label="Ukryj zachętę na czas tej wizyty" title="Ukryj na czas wizyty">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
                     </div>
                 </section>
 
                 <!-- Guest Data Migration Prompt (shown after connecting account when local guest data exists) -->
-                <section id="guest-migration-banner" aria-label="Przeniesienie lokalnych danych" class="hidden mb-6 rounded-xl bg-emerald-950/60 border border-emerald-700/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div class="flex items-start gap-3 min-w-0">
-                        <div class="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
-                            <i class="fas fa-file-import" aria-hidden="true"></i>
+                <section id="guest-migration-banner" aria-label="Przeniesienie lokalnych danych" class="hidden mb-6 rounded-xl bg-emerald-950/60 border border-emerald-700/60 p-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
+                                <i class="fas fa-file-import" aria-hidden="true"></i>
+                            </div>
+                            <p id="guest-migration-text" class="text-xs text-slate-200 leading-relaxed"></p>
                         </div>
-                        <p id="guest-migration-text" class="text-xs text-slate-200 leading-relaxed"></p>
-                    </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <button id="migrate-guest-data-button" type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3.5 rounded-lg text-xs font-semibold transition-colors">
-                            Zapisz na koncie
-                        </button>
-                        <button id="skip-guest-migration-button" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 px-3 rounded-lg text-xs font-medium transition-colors">
-                            Nie przenoś
-                        </button>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button id="migrate-guest-data-button" type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3.5 rounded-lg text-xs font-semibold transition-colors">
+                                Zapisz na koncie
+                            </button>
+                            <button id="skip-guest-migration-button" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 px-3 rounded-lg text-xs font-medium transition-colors">
+                                Nie przenoś
+                            </button>
+                        </div>
                     </div>
                 </section>
 
@@ -795,7 +810,19 @@
                 <!-- Home Page -->
                 <div id="home-page" class="page-content hidden fade-in">
                     <h2 id="home-greeting" class="text-2xl font-bold mb-2">Czego dziś słuchamy?</h2>
-                    <p class="text-slate-300 mb-6">Wyszukaj swoją ulubioną muzykę w polu wyszukiwania powyżej.</p>
+                    <p id="home-subtitle" class="text-slate-300 mb-4">Wybierz gotowy utwór na start poniżej, kliknij kategorię lub wyszukaj dowolną piosenkę powyżej — bez logowania.</p>
+
+                    <div class="flex flex-wrap items-center gap-2 mb-6" aria-label="Szybkie kategorie muzyczne">
+                        <button id="starter-tracks-button" type="button" class="bg-blue-600/25 hover:bg-blue-600/40 border border-blue-500/40 text-blue-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">
+                            <i class="fas fa-bolt mr-1" aria-hidden="true"></i> Polecane na start
+                        </button>
+                        <button type="button" data-quick-search="Polskie hity muzyka" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Polskie hity</button>
+                        <button type="button" data-quick-search="Pop hits music" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Pop</button>
+                        <button type="button" data-quick-search="Rock classics" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Rock</button>
+                        <button type="button" data-quick-search="Lofi hip hop beats" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Lo-Fi</button>
+                        <button type="button" data-quick-search="Hip hop rap" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Hip-Hop</button>
+                        <button type="button" data-quick-search="Electronic dance music" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Elektroniczna</button>
+                    </div>
                     
                     <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div class="text-slate-400 italic">Wpisz czego szukasz w polu wyszukiwania</div>
@@ -818,7 +845,7 @@
                 <div id="playlists-page" class="page-content hidden fade-in">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-2xl font-bold">Twoje playlisty</h2>
-                        <button id="create-playlist-button" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded-full text-sm font-medium">
+                        <button id="create-playlist-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded-full text-sm font-medium">
                             <i class="fas fa-plus mr-1"></i> Nowa playlista
                         </button>
                     </div>
@@ -867,11 +894,11 @@
                                 <div id="current-song-artist" class="text-slate-400 text-xs truncate">Wybierz utwór z listy</div>
                             </div>
                             <div class="flex space-x-2">
-                                <button id="like-button" class="text-slate-400 hover:text-red-500 tooltip">
+                                <button id="like-button" type="button" class="text-slate-400 hover:text-red-500 tooltip" aria-label="Dodaj do ulubionych">
                                     <i class="far fa-heart"></i>
                                     <span class="tooltip-text">Dodaj do ulubionych</span>
                                 </button>
-                                <button id="add-to-playlist-button" class="text-slate-400 hover:text-blue-500 tooltip">
+                                <button id="add-to-playlist-button" type="button" class="text-slate-400 hover:text-blue-500 tooltip" aria-label="Dodaj do playlisty">
                                     <i class="fas fa-plus"></i>
                                     <span class="tooltip-text">Dodaj do playlisty</span>
                                 </button>
@@ -880,23 +907,23 @@
                         
                         <!-- Controls -->
                         <div class="flex items-center space-x-4">
-                            <button id="shuffle-button" class="text-slate-400 hover:text-white tooltip" title="Losowe odtwarzanie">
+                            <button id="shuffle-button" type="button" class="text-slate-400 hover:text-white tooltip" title="Losowe odtwarzanie" aria-label="Losowe odtwarzanie" aria-pressed="false">
                                 <i class="fas fa-random"></i>
                                 <span class="tooltip-text">Losowe odtwarzanie</span>
                             </button>
-                            <button id="prev-button" class="text-slate-400 hover:text-white tooltip" title="Poprzedni utwór">
+                            <button id="prev-button" type="button" class="text-slate-400 hover:text-white tooltip" title="Poprzedni utwór" aria-label="Poprzedni utwór">
                                 <i class="fas fa-step-backward"></i>
                                 <span class="tooltip-text">Poprzedni utwór</span>
                             </button>
-                            <button id="play-button" class="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 rounded-full flex items-center justify-center tooltip" title="Odtwarzaj/Pauza">
+                            <button id="play-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 rounded-full flex items-center justify-center tooltip" title="Odtwarzaj/Pauza" aria-label="Odtwarzaj">
                                 <i class="fas fa-play"></i>
                                 <span class="tooltip-text">Odtwarzaj/Pauza</span>
                             </button>
-                            <button id="next-button" class="text-slate-400 hover:text-white tooltip" title="Następny utwór">
+                            <button id="next-button" type="button" class="text-slate-400 hover:text-white tooltip" title="Następny utwór" aria-label="Następny utwór">
                                 <i class="fas fa-step-forward"></i>
                                 <span class="tooltip-text">Następny utwór</span>
                             </button>
-                            <button id="repeat-button" class="text-slate-400 hover:text-white tooltip" title="Powtarzaj">
+                            <button id="repeat-button" type="button" class="text-slate-400 hover:text-white tooltip" title="Powtarzaj" aria-label="Powtarzaj" aria-pressed="false">
                                 <i class="fas fa-redo"></i>
                                 <span class="tooltip-text">Powtarzaj</span>
                             </button>
@@ -904,11 +931,11 @@
                         
                         <!-- Volume and other controls -->
                         <div class="flex items-center space-x-3 w-1/3 justify-end volume-controls">
-                            <button id="volume-button" class="text-slate-400 hover:text-white tooltip">
+                            <button id="volume-button" type="button" class="text-slate-400 hover:text-white tooltip" aria-label="Wycisz">
                                 <i class="fas fa-volume-up"></i>
                                 <span class="tooltip-text">Głośność</span>
                             </button>
-                            <input type="range" id="volume-bar" class="volume-bar" min="0" max="100" value="80">
+                            <input type="range" id="volume-bar" class="volume-bar" min="0" max="100" value="80" aria-label="Poziom głośności">
                         </div>
                     </div>
                 </div>
@@ -927,24 +954,30 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-3 ml-2">
-                        <button id="mobile-prev-button" class="text-white w-8 h-8 flex items-center justify-center">
+                        <button id="mobile-prev-button" type="button" class="text-white w-8 h-8 flex items-center justify-center" aria-label="Poprzedni utwór">
                             <i class="fas fa-step-backward text-lg"></i>
                         </button>
-                        <button id="mobile-play-button" class="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 rounded-full flex items-center justify-center">
+                        <button id="mobile-play-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white w-10 h-10 rounded-full flex items-center justify-center" aria-label="Odtwarzaj">
                             <i class="fas fa-play"></i>
                         </button>
-                        <button id="mobile-next-button" class="text-white w-8 h-8 flex items-center justify-center">
+                        <button id="mobile-next-button" type="button" class="text-white w-8 h-8 flex items-center justify-center" aria-label="Następny utwór">
                             <i class="fas fa-step-forward text-lg"></i>
                         </button>
                     </div>
                 </div>
                 <div id="mobile-player-expanded" class="hidden mt-3">
-                    <div class="flex items-center justify-center space-x-4 mb-4">
-                        <button id="mobile-like-button" class="text-slate-400 hover:text-red-500">
+                    <div class="flex items-center justify-center space-x-6 mb-4">
+                        <button id="mobile-shuffle-button" type="button" class="text-slate-400 hover:text-white" aria-label="Losowe odtwarzanie" aria-pressed="false">
+                            <i class="fas fa-random text-lg"></i>
+                        </button>
+                        <button id="mobile-like-button" type="button" class="text-slate-400 hover:text-red-500" aria-label="Dodaj do ulubionych" aria-pressed="false">
                             <i class="far fa-heart text-xl"></i>
                         </button>
-                        <button id="mobile-playlist-button" class="text-slate-400 hover:text-blue-500">
+                        <button id="mobile-playlist-button" type="button" class="text-slate-400 hover:text-blue-500" aria-label="Dodaj do playlisty">
                             <i class="fas fa-plus text-xl"></i>
+                        </button>
+                        <button id="mobile-repeat-button" type="button" class="text-slate-400 hover:text-white" aria-label="Powtarzaj" aria-pressed="false">
+                            <i class="fas fa-redo text-lg"></i>
                         </button>
                     </div>
                     <!-- Mobile Progress Bar -->
@@ -972,7 +1005,7 @@
     <div id="toast" class="hidden fixed top-20 left-1/2 z-[70] max-w-[calc(100%_-_2rem)] -translate-x-1/2 rounded-lg bg-slate-700 px-4 py-3 text-sm text-white shadow-xl pointer-events-none" role="status" aria-live="polite"></div>
 
     <script defer src="/js/rejson-account.js?v=1"></script>
-    <script defer src="ad-blocker.js"></script>
-    <script defer src="app.js"></script>
+    <script defer src="ad-blocker.js?v=20261105"></script>
+    <script defer src="app.js?v=20261105"></script>
 </body>
 </html>
