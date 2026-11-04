@@ -3,6 +3,19 @@
 // This is a browser-side YouTube Data API key. Restrict it by HTTP referrer
 // and to the YouTube Data API in Google Cloud Console.
 const API_KEY = 'AIzaSyBzEss-uFNFF-jl1kIY6jYswAnCDRN4eao';
+
+// Wspólny backend Supabase dla rejson59.github.io; autoryzacja wyłącznie po stronie
+// serwera na podstawie zweryfikowanego tokenu sesji (community_session_user).
+const SUPABASE_RPC_BASE = 'https://hzbqzfimtroixnldzjeq.supabase.co/rest/v1/rpc/';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6YnF6ZmltdHJvaXhubGR6amVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTYzOTEsImV4cCI6MjEwODE3MjM5MX0.oeZWOaNd6p3wZBZQQu3QWjRHlrkxV_BFQRNSN-6YntE';
+
+const LOGIN_PENDING_KEY = 'jakuplayer_login_pending_v1';
+const ACCOUNT_DISCONNECTED_KEY = 'jakuplayer_account_disconnected_v1';
+const PROMO_DISMISSED_KEY = 'jakuplayer_promo_dismissed_v1';
+const MIGRATION_DISMISSED_KEY = 'jakuplayer_migration_dismissed_v1';
+const LOGIN_PENDING_MAX_AGE_MS = 30 * 60 * 1000;
+const HISTORY_LIMIT = 30;
+
 const byId = (id) => document.getElementById(id);
 
 const dom = {
@@ -53,17 +66,9 @@ const dom = {
     historyPage: byId('history-page'),
     welcomePage: byId('welcome-page'),
     menuLinks: document.querySelectorAll('.menu-link'),
-    loginModal: byId('login-modal'),
-    loginButton: byId('login-button'),
-    usernameInput: byId('username'),
-    welcomeUsername: byId('welcome-username'),
-    headerUsername: byId('header-username'),
-    headerUsernameInitial: byId('header-username-initial'),
-    desktopUsername: byId('desktop-username'),
-    mobileUsername: byId('mobile-username'),
-    logoutButton: byId('logout-button'),
-    desktopLogoutButton: byId('desktop-logout-button'),
+    homeGreeting: byId('home-greeting'),
     startListeningButton: byId('start-listening-button'),
+    welcomeConnectButton: byId('welcome-connect-button'),
     mobileMenuButton: byId('mobile-menu-button'),
     mobileMenu: byId('mobile-menu'),
     menuBackdrop: byId('menu-backdrop'),
@@ -76,7 +81,60 @@ const dom = {
     mainContent: document.querySelector('.player-controls'),
     adBlockStatus: byId('ad-block-status'),
     adBlockStatusText: byId('ad-block-status-text'),
-    toast: byId('toast')
+    toast: byId('toast'),
+
+    // Wspólne konto rejson59.github.io i synchronizacja
+    accountModal: byId('account-modal'),
+    accountModalBackdrop: byId('account-modal-backdrop'),
+    closeAccountModal: byId('close-account-modal'),
+    modalAccountStateBadge: byId('modal-account-state-badge'),
+    modalAccountStatus: byId('modal-account-status'),
+    modalGuestSection: byId('modal-guest-section'),
+    modalConnectButton: byId('modal-connect-button'),
+    modalRetryButton: byId('modal-retry-button'),
+    modalConnectedSection: byId('modal-connected-section'),
+    modalConnectedUsername: byId('modal-connected-username'),
+    modalSyncStatus: byId('modal-sync-status'),
+    modalSyncRetryButton: byId('modal-sync-retry-button'),
+    modalLikedCount: byId('modal-liked-count'),
+    modalPlaylistsCount: byId('modal-playlists-count'),
+    modalHistoryCount: byId('modal-history-count'),
+    modalMigrationBox: byId('modal-migration-box'),
+    modalMigrationText: byId('modal-migration-text'),
+    modalMigrateButton: byId('modal-migrate-button'),
+    modalSkipMigrationButton: byId('modal-skip-migration-button'),
+    modalDisconnectButton: byId('modal-disconnect-button'),
+    headerAccountButton: byId('header-account-button'),
+    headerAccountDot: byId('header-account-dot'),
+    headerUsername: byId('header-username'),
+    headerUsernameInitial: byId('header-username-initial'),
+    desktopAccountGuest: byId('desktop-account-guest'),
+    desktopGuestLabel: byId('desktop-guest-label'),
+    desktopRetryButton: byId('desktop-retry-button'),
+    desktopAccountConnected: byId('desktop-account-connected'),
+    desktopUsername: byId('desktop-username'),
+    desktopSyncBadge: byId('desktop-sync-badge'),
+    desktopAccountButton: byId('desktop-account-button'),
+    desktopAccountStatus: byId('desktop-account-status'),
+    mobileAccountGuest: byId('mobile-account-guest'),
+    mobileGuestLabel: byId('mobile-guest-label'),
+    mobileRetryButton: byId('mobile-retry-button'),
+    mobileAccountConnected: byId('mobile-account-connected'),
+    mobileUsername: byId('mobile-username'),
+    mobileSyncBadge: byId('mobile-sync-badge'),
+    mobileAccountButton: byId('mobile-account-button'),
+    mobileAccountStatus: byId('mobile-account-status'),
+    syncPromoBanner: byId('sync-promo-banner'),
+    syncPromoText: byId('sync-promo-text'),
+    dismissSyncPromo: byId('dismiss-sync-promo'),
+    guestMigrationBanner: byId('guest-migration-banner'),
+    guestMigrationText: byId('guest-migration-text'),
+    migrateGuestDataButton: byId('migrate-guest-data-button'),
+    skipGuestMigrationButton: byId('skip-guest-migration-button'),
+    connectButtons: document.querySelectorAll('[data-account-connect]'),
+    retryButtons: document.querySelectorAll('[data-account-retry]'),
+    disconnectButtons: document.querySelectorAll('[data-account-disconnect]'),
+    syncRetryButtons: document.querySelectorAll('[data-sync-retry]')
 };
 
 let player = null;
@@ -99,6 +157,19 @@ let isTouching = false;
 let toastTimer = null;
 let playerLoadingToastShown = false;
 let storageWarningShown = false;
+
+// Stan konta wspólnego (token trzymany wyłącznie w pamięci, nigdy w URL/logach/storage projektu)
+let accountState = 'no_session'; // 'checking' | 'connected' | 'no_session' | 'network_error' | 'disconnected'
+let activeAccountSession = null; // { username, token } | null
+let accountLibraryLoaded = false;
+let accountStatusMessage = '';
+let syncState = 'idle'; // 'idle' | 'loading' | 'saving' | 'synced' | 'error'
+let syncErrorMessage = '';
+let authEpoch = 0;
+let accountSubscriptionCleanup = null;
+let dirtySections = { liked: false, playlists: false, history: false };
+let activeSavePromise = null;
+let migrationInProgress = false;
 
 function storageGet(key) {
     try {
@@ -126,6 +197,31 @@ function storageRemove(key) {
         localStorage.removeItem(key);
     } catch (_) {
         // The app can still work for the current session without storage.
+    }
+}
+
+function sessionGet(key) {
+    try {
+        return sessionStorage.getItem(key);
+    } catch (_) {
+        return null;
+    }
+}
+
+function sessionSet(key, value) {
+    try {
+        sessionStorage.setItem(key, value);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function sessionRemove(key) {
+    try {
+        sessionStorage.removeItem(key);
+    } catch (_) {
+        // Ignore unavailable sessionStorage.
     }
 }
 
@@ -178,23 +274,69 @@ function normalizeSong(song) {
     };
 }
 
-function readPlaylists() {
-    return readStoredArray('playlists').map((playlist) => {
-        if (!playlist || typeof playlist !== 'object' || !playlist.id) return null;
-        return {
-            id: String(playlist.id),
-            name: String(playlist.name || 'Playlista').slice(0, 80),
-            songs: (Array.isArray(playlist.songs) ? playlist.songs : [])
-                .map(normalizeSong)
-                .filter(Boolean)
-        };
-    }).filter(Boolean);
+function normalizePlaylist(playlist) {
+    if (!playlist || typeof playlist !== 'object' || !playlist.id) return null;
+    const id = String(playlist.id).trim();
+    if (!id) return null;
+    const name = String(playlist.name || 'Playlista').trim().slice(0, 80) || 'Playlista';
+    const seen = new Set();
+    const songs = (Array.isArray(playlist.songs) ? playlist.songs : [])
+        .map(normalizeSong)
+        .filter((song) => {
+            if (!song || seen.has(song.id)) return false;
+            seen.add(song.id);
+            return true;
+        });
+    return { id, name, songs };
 }
 
-let username = storageGet('username') || 'Użytkownik';
-let likedSongs = readStoredArray('likedSongs').map(normalizeSong).filter(Boolean);
-let recentlyPlayedSongs = readStoredArray('recentlyPlayed').map(normalizeSong).filter(Boolean).slice(0, 10);
-let playlists = readPlaylists();
+function deduplicateSongs(items, limit = Infinity) {
+    const seen = new Set();
+    const result = [];
+    for (const raw of Array.isArray(items) ? items : []) {
+        const normalized = normalizeSong(raw);
+        if (!normalized || seen.has(normalized.id)) continue;
+        seen.add(normalized.id);
+        result.push(normalized);
+        if (result.length >= limit) break;
+    }
+    return result;
+}
+
+function deduplicatePlaylists(items, limit = 100) {
+    const seen = new Set();
+    const result = [];
+    for (const raw of Array.isArray(items) ? items : []) {
+        const normalized = normalizePlaylist(raw);
+        if (!normalized || seen.has(normalized.id)) continue;
+        seen.add(normalized.id);
+        result.push(normalized);
+        if (result.length >= limit) break;
+    }
+    return result;
+}
+
+function readGuestLibrary() {
+    return {
+        likedSongs: deduplicateSongs(readStoredArray('likedSongs'), 500),
+        playlists: deduplicatePlaylists(readStoredArray('playlists'), 100),
+        recentlyPlayedSongs: deduplicateSongs(readStoredArray('recentlyPlayed'), HISTORY_LIMIT)
+    };
+}
+
+function clearGuestLibraryStorage() {
+    storageRemove('likedSongs');
+    storageRemove('playlists');
+    storageRemove('recentlyPlayed');
+}
+
+// Usuwamy przestarzałą, nieautoryzowaną nazwę lokalną ze starszej wersji aplikacji.
+storageRemove('username');
+
+const initialGuestLibrary = readGuestLibrary();
+let likedSongs = initialGuestLibrary.likedSongs;
+let recentlyPlayedSongs = initialGuestLibrary.recentlyPlayedSongs;
+let playlists = initialGuestLibrary.playlists;
 let isFirstVisit = storageGet('isFirstVisit') === null;
 
 const adBlocker = new YouTubeAdBlocker({
@@ -238,6 +380,28 @@ function formatSongCount(count) {
     return `${count} ${suffix}`;
 }
 
+function formatPlaylistCount(count) {
+    if (count === 1) return '1 playlista';
+    const lastTwo = count % 100;
+    const last = count % 10;
+    const suffix = last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
+        ? 'playlisty'
+        : 'playlist';
+    return `${count} ${suffix}`;
+}
+
+function summarizeLibraryCounts(lib) {
+    const parts = [];
+    if (lib.likedSongs.length > 0) parts.push(`${formatSongCount(lib.likedSongs.length)} w ulubionych`);
+    if (lib.playlists.length > 0) parts.push(formatPlaylistCount(lib.playlists.length));
+    if (lib.recentlyPlayedSongs.length > 0) parts.push(`${formatSongCount(lib.recentlyPlayedSongs.length)} w historii`);
+    return parts.join(', ');
+}
+
+function hasLibraryItems(lib) {
+    return lib.likedSongs.length > 0 || lib.playlists.length > 0 || lib.recentlyPlayedSongs.length > 0;
+}
+
 function artworkMarkup(song, className) {
     if (!song.thumbnail) {
         return '<i class="fas fa-music text-slate-500" aria-hidden="true"></i>';
@@ -245,21 +409,608 @@ function artworkMarkup(song, className) {
     return `<img src="${escapeHTML(song.thumbnail)}" alt="${escapeHTML(song.title)}" class="${className}" loading="lazy" referrerpolicy="no-referrer">`;
 }
 
-function updateUsernameDisplay() {
-    dom.welcomeUsername.textContent = username;
-    dom.headerUsername.textContent = username;
-    dom.headerUsernameInitial.textContent = username.charAt(0).toUpperCase() || 'U';
-    dom.desktopUsername.textContent = username;
-    dom.mobileUsername.textContent = username;
+function hasValidPendingLogin() {
+    const raw = sessionGet(LOGIN_PENDING_KEY);
+    if (!raw) return false;
+    const timestamp = Number(raw);
+    const age = Date.now() - timestamp;
+    if (!Number.isFinite(timestamp) || timestamp <= 0 || age < 0 || age >= LOGIN_PENDING_MAX_AGE_MS) {
+        sessionRemove(LOGIN_PENDING_KEY);
+        return false;
+    }
+    return true;
 }
 
-function showLoginModal() {
-    dom.loginModal.classList.add('open');
-    dom.usernameInput.focus();
+function clearPendingLogin() {
+    sessionRemove(LOGIN_PENDING_KEY);
 }
 
-function hideLoginModal() {
-    dom.loginModal.classList.remove('open');
+function isDisconnectedByChoice() {
+    return storageGet(ACCOUNT_DISCONNECTED_KEY) === '1' || sessionGet(ACCOUNT_DISCONNECTED_KEY) === '1';
+}
+
+function setDisconnectedByChoice(disconnected) {
+    if (disconnected) {
+        if (!storageSet(ACCOUNT_DISCONNECTED_KEY, '1')) {
+            sessionSet(ACCOUNT_DISCONNECTED_KEY, '1');
+        }
+    } else {
+        storageRemove(ACCOUNT_DISCONNECTED_KEY);
+        sessionRemove(ACCOUNT_DISCONNECTED_KEY);
+    }
+}
+
+async function callJakuplayerRpc(fnName, params, token) {
+    if (typeof token !== 'string' || token.length < 16) {
+        throw new Error('Brak ważnej sesji konta.');
+    }
+
+    let response;
+    try {
+        response = await fetch(`${SUPABASE_RPC_BASE}${fnName}`, {
+            method: 'POST',
+            cache: 'no-store',
+            keepalive: fnName === 'jakuplayer_save_library',
+            headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ p_token: token, ...params })
+        });
+    } catch (_) {
+        const networkError = new Error('Brak połączenia z serwerem konta. Sprawdź sieć i spróbuj ponownie.');
+        networkError.isNetwork = true;
+        throw networkError;
+    }
+
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+        const message = body && typeof body.message === 'string' && body.message
+            ? body.message
+            : 'Serwer odrzucił żądanie biblioteki konta.';
+        const rpcError = new Error(message);
+        rpcError.status = response.status;
+        throw rpcError;
+    }
+    return body;
+}
+
+function refreshAllRenderedLikeStates() {
+    const likedIds = new Set(likedSongs.map((song) => song.id));
+    document.querySelectorAll('.song-card').forEach((card) => {
+        const button = card.querySelector('.like-button');
+        if (!button) return;
+        const liked = likedIds.has(card.dataset.songId);
+        setIcon(button, `${liked ? 'fas' : 'far'} fa-heart`);
+        button.classList.toggle('text-red-500', liked);
+        button.classList.toggle('text-slate-400', !liked);
+        button.setAttribute('aria-pressed', String(liked));
+    });
+
+    if (currentSong) {
+        const currentLiked = likedIds.has(currentSong.id);
+        setIcon(dom.likeButton, `${currentLiked ? 'fas text-red-500' : 'far'} fa-heart`);
+        setIcon(dom.mobileLikeButton, `${currentLiked ? 'fas text-red-500' : 'far'} fa-heart text-xl`);
+        dom.likeButton.setAttribute('aria-pressed', String(currentLiked));
+        dom.mobileLikeButton.setAttribute('aria-pressed', String(currentLiked));
+    } else {
+        setIcon(dom.likeButton, 'far fa-heart');
+        setIcon(dom.mobileLikeButton, 'far fa-heart text-xl');
+        dom.likeButton.setAttribute('aria-pressed', 'false');
+        dom.mobileLikeButton.setAttribute('aria-pressed', 'false');
+    }
+}
+
+function applyLibraryToMemory(library) {
+    likedSongs = deduplicateSongs(library.likedSongs, 500);
+    playlists = deduplicatePlaylists(library.playlists, 100);
+    recentlyPlayedSongs = deduplicateSongs(library.recentlyPlayedSongs, HISTORY_LIMIT);
+
+    updateFavoritesCount();
+    updateHistoryCount();
+    refreshAllRenderedLikeStates();
+    loadFavorites();
+    loadPlaylists();
+    loadHistory();
+}
+
+function clearConnectedAccountData() {
+    activeAccountSession = null;
+    accountLibraryLoaded = false;
+    syncState = 'idle';
+    syncErrorMessage = '';
+    dirtySections = { liked: false, playlists: false, history: false };
+    migrationInProgress = false;
+    selectedPlaylistForDetail = null;
+    selectedSongForPlaylist = null;
+    dom.playlistModal.classList.remove('open');
+    dom.playlistDetailModal.classList.remove('open');
+    applyLibraryToMemory({ likedSongs: [], playlists: [], recentlyPlayedSongs: [] });
+}
+
+function loadGuestLibraryIntoMemory() {
+    applyLibraryToMemory(readGuestLibrary());
+}
+
+function buildDirtyPayloadFromSnapshot(sections, snapshot) {
+    const payload = {};
+    if (sections.liked) payload.p_liked_songs = snapshot.likedSongs;
+    if (sections.playlists) payload.p_playlists = snapshot.playlists;
+    if (sections.history) payload.p_history = snapshot.recentlyPlayedSongs;
+    return payload;
+}
+
+function hasAnyDirtySection(sections = dirtySections) {
+    return Boolean(sections.liked || sections.playlists || sections.history);
+}
+
+async function flushAccountSave() {
+    if (activeSavePromise) return activeSavePromise;
+    if (!activeAccountSession || !accountLibraryLoaded || !hasAnyDirtySection()) return;
+
+    const session = activeAccountSession;
+    const epoch = authEpoch;
+    const sectionsToSave = { ...dirtySections };
+    const snapshot = {
+        likedSongs: likedSongs.map((song) => ({ ...song })),
+        playlists: playlists.map((pl) => ({ ...pl, songs: pl.songs.map((song) => ({ ...song })) })),
+        recentlyPlayedSongs: recentlyPlayedSongs.map((song) => ({ ...song }))
+    };
+    dirtySections = { liked: false, playlists: false, history: false };
+    syncState = 'saving';
+    syncErrorMessage = '';
+    updateAccountUI();
+
+    const run = (async () => {
+        try {
+            const payload = buildDirtyPayloadFromSnapshot(sectionsToSave, snapshot);
+            await callJakuplayerRpc('jakuplayer_save_library', payload, session.token);
+            if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+            syncState = hasAnyDirtySection() ? 'saving' : 'synced';
+            syncErrorMessage = '';
+            updateAccountUI();
+        } catch (error) {
+            if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+            dirtySections = {
+                liked: dirtySections.liked || sectionsToSave.liked,
+                playlists: dirtySections.playlists || sectionsToSave.playlists,
+                history: dirtySections.history || sectionsToSave.history
+            };
+            syncState = 'error';
+            syncErrorMessage = error?.message || 'Nie udało się zapisać zmian na koncie.';
+            updateAccountUI();
+
+            if (error?.status === 401 || error?.status === 403 || /sesja wygasła|musisz być zalogowany/i.test(String(error?.message || ''))) {
+                verifyAccountSession(false);
+            }
+        } finally {
+            activeSavePromise = null;
+            if (epoch === authEpoch && activeAccountSession && activeAccountSession.token === session.token && hasAnyDirtySection() && syncState !== 'error') {
+                flushAccountSave();
+            }
+        }
+    })();
+
+    activeSavePromise = run;
+    return run;
+}
+
+function canMutateLibrary() {
+    if (!activeAccountSession) return true;
+    if (accountLibraryLoaded) return true;
+    if (syncState === 'loading') {
+        showToast('Trwa wczytywanie biblioteki z konta — spróbuj za chwilę.');
+    } else {
+        showToast('Najpierw ponów wczytanie biblioteki konta, aby nie nadpisać zapisanych danych.', true);
+    }
+    return false;
+}
+
+function persistSection(section) {
+    if (!activeAccountSession) {
+        if (section === 'liked') storageSet('likedSongs', JSON.stringify(likedSongs));
+        if (section === 'playlists') storageSet('playlists', JSON.stringify(playlists));
+        if (section === 'history') storageSet('recentlyPlayed', JSON.stringify(recentlyPlayedSongs));
+        updateAccountUI();
+        return;
+    }
+
+    dirtySections[section] = true;
+    flushAccountSave();
+}
+
+async function retrySync() {
+    if (!activeAccountSession) {
+        await verifyAccountSession(false);
+        return;
+    }
+    if (!accountLibraryLoaded) {
+        await loadConnectedAccountLibrary(activeAccountSession, authEpoch);
+        return;
+    }
+    if (hasAnyDirtySection()) {
+        syncState = 'saving';
+        syncErrorMessage = '';
+        updateAccountUI();
+        await flushAccountSave();
+    }
+}
+
+async function loadConnectedAccountLibrary(session, epoch) {
+    syncState = 'loading';
+    syncErrorMessage = '';
+    updateAccountUI();
+
+    try {
+        const remote = await callJakuplayerRpc('jakuplayer_get_library', {}, session.token);
+        if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+        accountLibraryLoaded = true;
+        applyLibraryToMemory({
+            likedSongs: Array.isArray(remote?.liked_songs) ? remote.liked_songs : [],
+            playlists: Array.isArray(remote?.playlists) ? remote.playlists : [],
+            recentlyPlayedSongs: Array.isArray(remote?.history) ? remote.history : []
+        });
+        syncState = 'synced';
+        syncErrorMessage = '';
+        accountStatusMessage = '';
+        updateAccountUI();
+    } catch (error) {
+        if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+        accountLibraryLoaded = false;
+        syncState = 'error';
+        syncErrorMessage = error?.message || 'Nie udało się wczytać biblioteki z konta.';
+        accountStatusMessage = syncErrorMessage;
+        updateAccountUI();
+    }
+}
+
+async function verifyAccountSession(fromClick = false) {
+    const pendingBefore = hasValidPendingLogin();
+
+    if (!fromClick && isDisconnectedByChoice() && !pendingBefore) {
+        ++authEpoch;
+        clearConnectedAccountData();
+        loadGuestLibraryIntoMemory();
+        accountState = 'disconnected';
+        accountStatusMessage = 'Odłączono konto w Jakuplayerze. Nadal możesz być zalogowany na rejson59.github.io.';
+        updateAccountUI();
+        return;
+    }
+
+    if (!window.RejsonAccount || typeof window.RejsonAccount.getSession !== 'function') {
+        clearPendingLogin();
+        clearConnectedAccountData();
+        loadGuestLibraryIntoMemory();
+        accountState = 'no_session';
+        accountStatusMessage = fromClick
+            ? 'Wspólne logowanie działa pod adresem https://rejson59.github.io/Jakuplayer/ (ten sam origin).'
+            : '';
+        updateAccountUI();
+        return;
+    }
+
+    const epoch = ++authEpoch;
+    const previousToken = activeAccountSession ? activeAccountSession.token : null;
+    accountState = 'checking';
+    accountStatusMessage = 'Sprawdzam konto rejson59.github.io…';
+    updateAccountUI();
+
+    let session = null;
+    try {
+        session = await window.RejsonAccount.getSession();
+    } catch (_) {
+        if (epoch !== authEpoch) return;
+        clearConnectedAccountData();
+        loadGuestLibraryIntoMemory();
+        accountState = 'network_error';
+        accountStatusMessage = 'Nie udało się sprawdzić konta rejson59.github.io. Sprawdź połączenie i spróbuj ponownie.';
+        updateAccountUI();
+        return;
+    }
+
+    if (epoch !== authEpoch) return;
+
+    const validSession = session
+        && typeof session.username === 'string'
+        && session.username.trim().length > 0
+        && typeof session.token === 'string'
+        && session.token.length >= 16;
+
+    if (!validSession) {
+        const hadActiveAccount = Boolean(previousToken);
+        clearPendingLogin();
+        setDisconnectedByChoice(false);
+        clearConnectedAccountData();
+        loadGuestLibraryIntoMemory();
+        accountState = 'no_session';
+
+        if (fromClick) {
+            if (!sessionSet(LOGIN_PENDING_KEY, String(Date.now()))) {
+                accountStatusMessage = 'Przeglądarka blokuje pamięć sesji (sessionStorage). Nie można bezpiecznie wrócić po zalogowaniu.';
+                updateAccountUI();
+                return;
+            }
+            accountStatusMessage = 'Otwieram logowanie rejson59.github.io…';
+            updateAccountUI();
+            window.RejsonAccount.open();
+            return;
+        }
+
+        if (pendingBefore) {
+            accountStatusMessage = 'Nie dokończono logowania. Kliknij „Zaloguj się przez rejson59.github.io”, aby spróbować ponownie.';
+        } else if (hadActiveAccount) {
+            accountStatusMessage = 'Wylogowano z konta rejson59.github.io. Przywrócono tryb lokalny.';
+        } else {
+            accountStatusMessage = '';
+        }
+        updateAccountUI();
+        return;
+    }
+
+    clearPendingLogin();
+    setDisconnectedByChoice(false);
+
+    // Jeśli token się zmienił lub wcześniej byliśmy w trybie gościa, czyścimy stan poprzedniej sesji przed wczytaniem nowej biblioteki.
+    if (previousToken !== session.token) {
+        clearConnectedAccountData();
+        activeAccountSession = { username: session.username.trim(), token: session.token };
+        accountState = 'connected';
+        accountStatusMessage = '';
+        await loadConnectedAccountLibrary(activeAccountSession, epoch);
+        return;
+    }
+
+    activeAccountSession = { username: session.username.trim(), token: session.token };
+    accountState = 'connected';
+    accountStatusMessage = '';
+    if (!accountLibraryLoaded) {
+        await loadConnectedAccountLibrary(activeAccountSession, epoch);
+    } else {
+        updateAccountUI();
+    }
+}
+
+function disconnectProjectAccount() {
+    // Jeżeli przed rozłączeniem zostały niezapisane zmiany, wyślij ostatnią migawkę z dotychczasowym tokenem.
+    if (activeAccountSession && accountLibraryLoaded && hasAnyDirtySection()) {
+        const finalToken = activeAccountSession.token;
+        const finalPayload = buildDirtyPayloadFromSnapshot(dirtySections, {
+            likedSongs: likedSongs.map((song) => ({ ...song })),
+            playlists: playlists.map((pl) => ({ ...pl, songs: pl.songs.map((song) => ({ ...song })) })),
+            recentlyPlayedSongs: recentlyPlayedSongs.map((song) => ({ ...song }))
+        });
+        callJakuplayerRpc('jakuplayer_save_library', finalPayload, finalToken).catch(() => {});
+    }
+
+    ++authEpoch;
+    clearPendingLogin();
+    setDisconnectedByChoice(true);
+    clearConnectedAccountData();
+    loadGuestLibraryIntoMemory();
+    accountState = 'disconnected';
+    accountStatusMessage = 'Odłączono konto w Jakuplayerze. Nadal jesteś zalogowany na rejson59.github.io.';
+    updateAccountUI();
+    dom.mobileMenu.classList.remove('open');
+    showToast('Odłączono konto w Jakuplayerze.');
+}
+
+async function migrateGuestDataToAccount() {
+    if (!activeAccountSession || !accountLibraryLoaded || migrationInProgress) return;
+    const guest = readGuestLibrary();
+    if (!hasLibraryItems(guest)) {
+        updateAccountUI();
+        return;
+    }
+
+    const session = activeAccountSession;
+    const epoch = authEpoch;
+    migrationInProgress = true;
+    syncState = 'saving';
+    syncErrorMessage = '';
+    updateAccountUI();
+
+    const mergedLiked = deduplicateSongs([...likedSongs, ...guest.likedSongs], 500);
+    const mergedHistory = deduplicateSongs([...guest.recentlyPlayedSongs, ...recentlyPlayedSongs], HISTORY_LIMIT);
+    const playlistMap = new Map();
+    playlists.forEach((pl) => {
+        playlistMap.set(pl.id, { ...pl, songs: pl.songs.map((s) => ({ ...s })) });
+    });
+    guest.playlists.forEach((guestPl) => {
+        if (playlistMap.has(guestPl.id)) {
+            const existing = playlistMap.get(guestPl.id);
+            existing.songs = deduplicateSongs([...existing.songs, ...guestPl.songs], 300);
+        } else if (playlistMap.size < 100) {
+            playlistMap.set(guestPl.id, { ...guestPl, songs: guestPl.songs.map((s) => ({ ...s })) });
+        }
+    });
+    const mergedPlaylists = Array.from(playlistMap.values()).slice(0, 100);
+
+    try {
+        const saved = await callJakuplayerRpc('jakuplayer_save_library', {
+            p_liked_songs: mergedLiked,
+            p_playlists: mergedPlaylists,
+            p_history: mergedHistory
+        }, session.token);
+
+        if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+
+        clearGuestLibraryStorage();
+        sessionRemove(MIGRATION_DISMISSED_KEY);
+        migrationInProgress = false;
+        applyLibraryToMemory({
+            likedSongs: Array.isArray(saved?.liked_songs) ? saved.liked_songs : mergedLiked,
+            playlists: Array.isArray(saved?.playlists) ? saved.playlists : mergedPlaylists,
+            recentlyPlayedSongs: Array.isArray(saved?.history) ? saved.history : mergedHistory
+        });
+        syncState = 'synced';
+        syncErrorMessage = '';
+        updateAccountUI();
+        showToast('Zapisano lokalne utwory, playlisty i historię na koncie!');
+    } catch (error) {
+        if (epoch !== authEpoch || !activeAccountSession || activeAccountSession.token !== session.token) return;
+        migrationInProgress = false;
+        syncState = 'error';
+        syncErrorMessage = error?.message || 'Nie udało się przenieść lokalnych danych na konto.';
+        updateAccountUI();
+        showToast(syncErrorMessage, true);
+    }
+}
+
+function skipGuestMigration() {
+    if (!activeAccountSession) return;
+    sessionSet(MIGRATION_DISMISSED_KEY, activeAccountSession.username);
+    updateAccountUI();
+}
+
+function updateAccountUI() {
+    const isConnected = accountState === 'connected' && Boolean(activeAccountSession);
+    const isChecking = accountState === 'checking';
+    const isNetworkError = accountState === 'network_error';
+    const isDisconnected = accountState === 'disconnected';
+    const confirmedName = isConnected ? activeAccountSession.username : '';
+
+    // Stan przycisków logowania / ponawiania
+    dom.connectButtons.forEach((btn) => {
+        btn.disabled = isChecking;
+        if (isChecking) btn.setAttribute('aria-busy', 'true');
+        else btn.removeAttribute('aria-busy');
+    });
+    dom.retryButtons.forEach((btn) => {
+        btn.classList.toggle('hidden', !isNetworkError);
+        btn.disabled = isChecking;
+    });
+
+    // Nagłówek i strona główna
+    if (isConnected) {
+        dom.headerUsername.textContent = confirmedName;
+        dom.headerUsernameInitial.textContent = confirmedName.charAt(0).toUpperCase();
+        dom.headerAccountDot.classList.remove('hidden');
+        dom.homeGreeting.textContent = `Witaj, ${confirmedName}!`;
+        dom.welcomeConnectButton.classList.add('hidden');
+    } else {
+        dom.headerUsername.textContent = isChecking ? 'Sprawdzam…' : 'Zapisz w chmurze';
+        dom.headerUsernameInitial.innerHTML = '<i class="fas fa-cloud text-[11px]" aria-hidden="true"></i>';
+        dom.headerAccountDot.classList.add('hidden');
+        dom.homeGreeting.textContent = 'Czego dziś słuchamy?';
+        dom.welcomeConnectButton.classList.remove('hidden');
+    }
+
+    // Etykieta stanu dla gościa / odłączenia / błędu
+    const guestLabel = isChecking
+        ? 'Sprawdzanie konta…'
+        : isDisconnected
+            ? 'Odłączono w Jakuplayerze'
+            : isNetworkError
+                ? 'Błąd połączenia z kontem'
+                : 'Tryb bez logowania';
+    dom.desktopGuestLabel.textContent = guestLabel;
+    dom.mobileGuestLabel.textContent = guestLabel;
+
+    dom.desktopAccountGuest.classList.toggle('hidden', isConnected);
+    dom.desktopAccountConnected.classList.toggle('hidden', !isConnected);
+    dom.mobileAccountGuest.classList.toggle('hidden', isConnected);
+    dom.mobileAccountConnected.classList.toggle('hidden', !isConnected);
+
+    if (isConnected) {
+        dom.desktopUsername.textContent = confirmedName;
+        dom.mobileUsername.textContent = confirmedName;
+        dom.modalConnectedUsername.textContent = confirmedName;
+    } else {
+        dom.desktopUsername.textContent = '';
+        dom.mobileUsername.textContent = '';
+        dom.modalConnectedUsername.textContent = '';
+    }
+
+    // Status synchronizacji dla połączonego konta
+    let syncBadgeText = 'W chmurze';
+    let syncDetailText = 'Polubione utwory, playlisty i historia są zapisane na koncie.';
+    if (syncState === 'loading') {
+        syncBadgeText = 'Wczytywanie…';
+        syncDetailText = 'Pobieranie biblioteki z konta…';
+    } else if (syncState === 'saving') {
+        syncBadgeText = 'Zapisywanie…';
+        syncDetailText = 'Zapisywanie zmian w chmurze…';
+    } else if (syncState === 'error') {
+        syncBadgeText = 'Błąd zapisu';
+        syncDetailText = syncErrorMessage || 'Nie udało się zsynchronizować zmian.';
+    }
+    dom.desktopSyncBadge.textContent = syncBadgeText;
+    dom.mobileSyncBadge.textContent = syncBadgeText;
+    dom.desktopSyncBadge.classList.toggle('text-amber-300', syncState === 'error' || syncState === 'saving' || syncState === 'loading');
+    dom.desktopSyncBadge.classList.toggle('text-emerald-400', syncState === 'synced' || syncState === 'idle');
+    dom.mobileSyncBadge.classList.toggle('text-amber-300', syncState === 'error' || syncState === 'saving' || syncState === 'loading');
+    dom.mobileSyncBadge.classList.toggle('text-emerald-400', syncState === 'synced' || syncState === 'idle');
+
+    // Okno konta i synchronizacji
+    dom.modalGuestSection.classList.toggle('hidden', isConnected);
+    dom.modalConnectedSection.classList.toggle('hidden', !isConnected);
+    dom.modalAccountStateBadge.textContent = isConnected ? 'Połączone konto' : guestLabel;
+    dom.modalAccountStateBadge.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+        isConnected
+            ? 'bg-emerald-900/70 text-emerald-300 border border-emerald-700/60'
+            : isNetworkError
+                ? 'bg-red-950/80 text-red-300 border border-red-800/60'
+                : 'bg-slate-700 text-slate-200'
+    }`;
+    dom.modalSyncStatus.textContent = syncDetailText;
+    dom.modalLikedCount.textContent = String(likedSongs.length);
+    dom.modalPlaylistsCount.textContent = String(playlists.length);
+    dom.modalHistoryCount.textContent = String(recentlyPlayedSongs.length);
+    dom.syncRetryButtons.forEach((btn) => {
+        btn.classList.toggle('hidden', !(isConnected && syncState === 'error'));
+    });
+
+    // Komunikaty statusu
+    const statusText = accountStatusMessage || (isConnected && syncState === 'error' ? syncErrorMessage : '');
+    dom.desktopAccountStatus.textContent = statusText;
+    dom.mobileAccountStatus.textContent = statusText;
+    dom.modalAccountStatus.textContent = statusText;
+
+    // Baner zachęcający dla niezalogowanych (opcjonalny, można zamknąć na czas wizyty)
+    const promoDismissed = sessionGet(PROMO_DISMISSED_KEY) === '1';
+    dom.syncPromoBanner.classList.toggle('hidden', isConnected || promoDismissed);
+    if (!isConnected) {
+        const currentGuestCounts = summarizeLibraryCounts({ likedSongs, playlists, recentlyPlayedSongs });
+        dom.syncPromoText.textContent = currentGuestCounts
+            ? `Masz teraz lokalnie: ${currentGuestCounts}. Zaloguj się przez rejson59.github.io, aby zapisać swoje polubione utwory, playlisty i historię oraz przenosić je na inne urządzenia.`
+            : 'Możesz słuchać bez logowania. Zaloguj się przez rejson59.github.io, aby zapisać swoje polubione utwory, playlisty i historię oraz przenosić je na inne urządzenia.';
+    }
+
+    // Propozycja bezpiecznego przeniesienia danych gościa na konto po zalogowaniu
+    const guestOnDisk = isConnected && accountLibraryLoaded ? readGuestLibrary() : { likedSongs: [], playlists: [], recentlyPlayedSongs: [] };
+    const migrationDismissedForUser = isConnected && sessionGet(MIGRATION_DISMISSED_KEY) === confirmedName;
+    const showMigration = isConnected && accountLibraryLoaded && hasLibraryItems(guestOnDisk) && !migrationDismissedForUser;
+
+    dom.guestMigrationBanner.classList.toggle('hidden', !showMigration);
+    dom.modalMigrationBox.classList.toggle('hidden', !showMigration);
+    if (showMigration) {
+        const summary = summarizeLibraryCounts(guestOnDisk);
+        const promptText = `Na tym urządzeniu zapisano wcześniej lokalne dane (${summary}). Czy chcesz zapisać je na koncie ${confirmedName}, aby mieć do nich dostęp na innych urządzeniach?`;
+        dom.guestMigrationText.textContent = promptText;
+        dom.modalMigrationText.textContent = promptText;
+        dom.migrateGuestDataButton.disabled = migrationInProgress;
+        dom.modalMigrateButton.disabled = migrationInProgress;
+    }
+}
+
+function openAccountModal() {
+    dom.accountModal.classList.add('open');
+    dom.mobileMenu.classList.remove('open');
+}
+
+function closeAccountModal() {
+    dom.accountModal.classList.remove('open');
+}
+
+function bindRejsonAccountBridge() {
+    if (!window.RejsonAccount || accountSubscriptionCleanup) return;
+    if (typeof window.RejsonAccount.subscribe === 'function') {
+        accountSubscriptionCleanup = window.RejsonAccount.subscribe(() => {
+            verifyAccountSession(false);
+        });
+    }
+    verifyAccountSession(false);
 }
 
 function showWelcomePage() {
@@ -292,44 +1043,6 @@ function showPage(pageName) {
         if (active) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
     });
-}
-
-function handleLogin() {
-    const newUsername = dom.usernameInput.value.trim().slice(0, 40);
-    if (!newUsername) {
-        dom.usernameInput.focus();
-        return;
-    }
-
-    username = newUsername;
-    storageSet('username', username);
-    updateUsernameDisplay();
-    hideLoginModal();
-    loadFavorites();
-    loadPlaylists();
-    loadHistory();
-
-    if (isFirstVisit) {
-        showWelcomePage();
-        isFirstVisit = false;
-        storageSet('isFirstVisit', 'false');
-    } else {
-        showPage('home');
-    }
-}
-
-function handleLogout() {
-    if (playerReady) {
-        try { player.pauseVideo(); } catch (_) { /* Player may be destroyed. */ }
-    }
-    isPlaying = false;
-    updatePlayButtons();
-    storageRemove('username');
-    username = 'Użytkownik';
-    dom.usernameInput.value = '';
-    updateUsernameDisplay();
-    showLoginModal();
-    dom.mobileMenu.classList.remove('open');
 }
 
 function createYouTubePlayer() {
@@ -679,13 +1392,20 @@ function toggleRepeat() {
 
 function toggleLikeSong(song) {
     const normalized = normalizeSong(song);
-    if (!normalized) return;
+    if (!normalized || !canMutateLibrary()) return;
 
     const index = likedSongs.findIndex((item) => item.id === normalized.id);
-    if (index === -1) likedSongs.push(normalized);
-    else likedSongs.splice(index, 1);
+    if (index === -1) {
+        if (likedSongs.length >= 500) {
+            showToast('Osiągnięto limit 500 polubionych utworów.', true);
+            return;
+        }
+        likedSongs.push(normalized);
+    } else {
+        likedSongs.splice(index, 1);
+    }
 
-    storageSet('likedSongs', JSON.stringify(likedSongs));
+    persistSection('liked');
     updateLikeButtons(normalized.id);
     updateFavoritesCount();
     if (!dom.favoritesPage.classList.contains('hidden')) loadFavorites();
@@ -849,10 +1569,13 @@ function displaySearchResults(items) {
 }
 
 function addToRecentlyPlayed(song) {
+    // Gdy trwa wczytywanie biblioteki konta lub wystąpił błąd wczytywania, nie nadpisuj zdalnej historii.
+    if (activeAccountSession && !accountLibraryLoaded) return;
+
     recentlyPlayedSongs = recentlyPlayedSongs.filter((item) => item.id !== song.id);
     recentlyPlayedSongs.unshift({ ...song });
-    recentlyPlayedSongs = recentlyPlayedSongs.slice(0, 10);
-    storageSet('recentlyPlayed', JSON.stringify(recentlyPlayedSongs));
+    recentlyPlayedSongs = recentlyPlayedSongs.slice(0, HISTORY_LIMIT);
+    persistSection('history');
     updateHistoryCount();
     if (!dom.historyPage.classList.contains('hidden')) loadHistory();
 }
@@ -922,36 +1645,36 @@ function showPlaylistDetail(playlist) {
 }
 
 function removeFromCurrentPlaylist(videoId) {
-    if (!selectedPlaylistForDetail) return;
+    if (!selectedPlaylistForDetail || !canMutateLibrary()) return;
     const playlistIndex = playlists.findIndex((item) => item.id === selectedPlaylistForDetail.id);
     if (playlistIndex === -1) return;
 
     playlists[playlistIndex].songs = playlists[playlistIndex].songs.filter((song) => song.id !== videoId);
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     showPlaylistDetail(playlists[playlistIndex]);
     loadPlaylists();
 }
 
 function deleteCurrentPlaylist() {
-    if (!selectedPlaylistForDetail) return;
+    if (!selectedPlaylistForDetail || !canMutateLibrary()) return;
     if (!window.confirm(`Czy na pewno chcesz usunąć playlistę "${selectedPlaylistForDetail.name}"?`)) return;
 
     playlists = playlists.filter((playlist) => playlist.id !== selectedPlaylistForDetail.id);
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     selectedPlaylistForDetail = null;
     dom.playlistDetailModal.classList.remove('open');
     loadPlaylists();
 }
 
 function editCurrentPlaylist() {
-    if (!selectedPlaylistForDetail) return;
+    if (!selectedPlaylistForDetail || !canMutateLibrary()) return;
     const newName = window.prompt('Podaj nową nazwę playlisty:', selectedPlaylistForDetail.name);
     if (!newName || !newName.trim()) return;
 
     const playlist = playlists.find((item) => item.id === selectedPlaylistForDetail.id);
     if (!playlist) return;
     playlist.name = newName.trim().slice(0, 80);
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     showPlaylistDetail(playlist);
     loadPlaylists();
 }
@@ -960,15 +1683,20 @@ function makePlaylist(name, songs = []) {
     return {
         id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         name: name.trim().slice(0, 80),
-        songs: songs.map(normalizeSong).filter(Boolean)
+        songs: deduplicateSongs(songs, 300)
     };
 }
 
 function createNewPlaylist() {
+    if (!canMutateLibrary()) return;
+    if (playlists.length >= 100) {
+        showToast('Osiągnięto limit 100 playlist.', true);
+        return;
+    }
     const name = window.prompt('Podaj nazwę nowej playlisty:');
     if (!name || !name.trim()) return;
     playlists.push(makePlaylist(name));
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     loadPlaylists();
 }
 
@@ -1008,12 +1736,16 @@ function showAddToPlaylistModal(song) {
 }
 
 function addToPlaylist(playlistId) {
-    if (!selectedSongForPlaylist) return;
+    if (!selectedSongForPlaylist || !canMutateLibrary()) return;
     const playlist = playlists.find((item) => item.id === playlistId);
     if (!playlist || playlist.songs.some((song) => song.id === selectedSongForPlaylist.id)) return;
+    if (playlist.songs.length >= 300) {
+        showToast('Ta playlista osiągnęła limit 300 utworów.', true);
+        return;
+    }
 
     playlist.songs.push({ ...selectedSongForPlaylist });
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     showAddToPlaylistModal(selectedSongForPlaylist);
     loadPlaylists();
     if (selectedPlaylistForDetail?.id === playlistId) showPlaylistDetail(playlist);
@@ -1024,12 +1756,17 @@ function createNewPlaylistFromModal() {
         showToast('Najpierw wybierz utwór.');
         return;
     }
+    if (!canMutateLibrary()) return;
+    if (playlists.length >= 100) {
+        showToast('Osiągnięto limit 100 playlist.', true);
+        return;
+    }
     const name = window.prompt('Podaj nazwę nowej playlisty:');
     if (!name || !name.trim()) return;
 
     const playlist = makePlaylist(name, [selectedSongForPlaylist]);
     playlists.push(playlist);
-    storageSet('playlists', JSON.stringify(playlists));
+    persistSection('playlists');
     loadPlaylists();
     dom.playlistModal.classList.remove('open');
     showPlaylistDetail(playlist);
@@ -1060,6 +1797,7 @@ function isInteractiveTarget(target) {
 function handleGlobalKeyboardShortcuts(event) {
     if (event.key === 'Escape') {
         dom.mobileMenu.classList.remove('open');
+        dom.accountModal.classList.remove('open');
         dom.playlistModal.classList.remove('open');
         dom.playlistDetailModal.classList.remove('open');
         return;
@@ -1070,7 +1808,7 @@ function handleGlobalKeyboardShortcuts(event) {
     if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
     if (isEditableTarget(event.target) || isInteractiveTarget(event.target)) return;
 
-    const modalIsOpen = [dom.loginModal, dom.playlistModal, dom.playlistDetailModal]
+    const modalIsOpen = [dom.accountModal, dom.playlistModal, dom.playlistDetailModal]
         .some((modal) => modal.classList.contains('open'));
     if (modalIsOpen) return;
 
@@ -1079,12 +1817,43 @@ function handleGlobalKeyboardShortcuts(event) {
 }
 
 function setupEventListeners() {
-    dom.loginButton.addEventListener('click', handleLogin);
-    dom.usernameInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') handleLogin();
+    dom.connectButtons.forEach((button) => {
+        button.addEventListener('click', () => verifyAccountSession(true));
     });
-    dom.logoutButton.addEventListener('click', handleLogout);
-    dom.desktopLogoutButton.addEventListener('click', handleLogout);
+    dom.retryButtons.forEach((button) => {
+        button.addEventListener('click', () => verifyAccountSession(false));
+    });
+    dom.disconnectButtons.forEach((button) => {
+        button.addEventListener('click', disconnectProjectAccount);
+    });
+    dom.syncRetryButtons.forEach((button) => {
+        button.addEventListener('click', () => retrySync());
+    });
+
+    dom.headerAccountButton.addEventListener('click', openAccountModal);
+    dom.desktopAccountButton.addEventListener('click', openAccountModal);
+    dom.mobileAccountButton.addEventListener('click', openAccountModal);
+    dom.closeAccountModal.addEventListener('click', closeAccountModal);
+    dom.accountModalBackdrop.addEventListener('click', closeAccountModal);
+
+    dom.dismissSyncPromo.addEventListener('click', () => {
+        sessionSet(PROMO_DISMISSED_KEY, '1');
+        updateAccountUI();
+    });
+    dom.migrateGuestDataButton.addEventListener('click', migrateGuestDataToAccount);
+    dom.modalMigrateButton.addEventListener('click', migrateGuestDataToAccount);
+    dom.skipGuestMigrationButton.addEventListener('click', skipGuestMigration);
+    dom.modalSkipMigrationButton.addEventListener('click', skipGuestMigration);
+
+    window.addEventListener('rj:account-ready', bindRejsonAccountBridge);
+    window.addEventListener('pagehide', () => { flushAccountSave(); });
+    window.addEventListener('online', () => {
+        if (accountState === 'network_error') verifyAccountSession(false);
+        else if (activeAccountSession && syncState === 'error') retrySync();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushAccountSave();
+    });
 
     dom.mobileMenuButton.addEventListener('click', () => dom.mobileMenu.classList.add('open'));
     dom.menuBackdrop.addEventListener('click', () => dom.mobileMenu.classList.remove('open'));
@@ -1158,26 +1927,40 @@ function setupEventListeners() {
 
     window.addEventListener('beforeunload', () => {
         window.clearInterval(progressTimer);
+        if (accountSubscriptionCleanup) {
+            accountSubscriptionCleanup();
+            accountSubscriptionCleanup = null;
+        }
         adBlocker.detach();
     });
 }
 
 function initApp() {
     setupEventListeners();
-    updateUsernameDisplay();
     updateVolume();
     loadFavorites();
     loadPlaylists();
     loadHistory();
 
-    if (!storageGet('username')) {
-        showLoginModal();
-    } else if (isFirstVisit) {
+    // Logowanie nie jest obowiązkowe: użytkownik od razu korzysta z aplikacji.
+    if (isFirstVisit) {
         showWelcomePage();
         isFirstVisit = false;
         storageSet('isFirstVisit', 'false');
     } else {
         showPage('home');
+    }
+
+    if (window.RejsonAccount) {
+        bindRejsonAccountBridge();
+    } else {
+        // Wyczyść ewentualny przeterminowany znacznik powrotu i zaktualizuj UI trybu gościa.
+        hasValidPendingLogin();
+        if (isDisconnectedByChoice()) {
+            accountState = 'disconnected';
+            accountStatusMessage = 'Odłączono konto w Jakuplayerze. Nadal możesz być zalogowany na rejson59.github.io.';
+        }
+        updateAccountUI();
     }
 
     loadYouTubeAPI();
