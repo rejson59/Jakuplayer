@@ -124,18 +124,6 @@
             transform: translateX(0);
         }
         
-        /* Login modal */
-        .login-modal {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        
-        .login-modal.open {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        
         /* Loading spinner */
         .spinner {
             width: 24px;
@@ -205,7 +193,7 @@
                 transition: width 0.1s linear;
             }
 
-/* Custom thumb for better touch targets */
+            /* Custom thumb for better touch targets */
             .mobile-progress-bar::-webkit-slider-thumb {
                 -webkit-appearance: none;
                 width: 16px;
@@ -253,7 +241,7 @@
             opacity: 1;
         }
         
-        /* Playlist modal */
+        /* Modals */
         .playlist-modal {
             opacity: 0;
             pointer-events: none;
@@ -285,6 +273,24 @@
         /* Playlist detail */
         .playlist-detail-header {
             background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+        }
+
+        /* Shared rejson59.github.io sign-in button */
+        .rejson-login-btn {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            color: #0f172a;
+            border: 1px solid #93c5fd;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        }
+
+        .rejson-login-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+        }
+
+        .rejson-login-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
         }
 
         /* YouTube requires a real player viewport. Keep it invisible without
@@ -330,18 +336,118 @@
     </style>
 </head>
 <body class="min-h-screen">
-    <!-- Login Modal -->
-    <div id="login-modal" class="login-modal fixed inset-0 flex items-center justify-center z-50">
-        <div class="absolute inset-0 bg-black/70"></div>
-        <div class="bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 relative z-10 slide-up">
-            <h2 class="text-2xl font-bold mb-6 text-center">Witaj w Jakuplayer</h2>
-            <div class="mb-4">
-                <label for="username" class="block text-sm font-medium mb-1">Nazwa użytkownika</label>
-                <input type="text" id="username" placeholder="Wprowadź nazwę" class="w-full bg-slate-700 text-white rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <!-- Optional Shared Account & Sync Modal (opened on user request, never blocking) -->
+    <div id="account-modal" class="playlist-modal fixed inset-0 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+        <div id="account-modal-backdrop" class="absolute inset-0 bg-black/70"></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-lg mx-4 relative z-10 slide-up max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-start gap-4 mb-3">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span id="modal-account-state-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-700 text-slate-200">Tryb bez logowania</span>
+                    </div>
+                    <h2 id="account-modal-title" class="text-xl font-bold">Konto i synchronizacja</h2>
+                </div>
+                <button id="close-account-modal" type="button" class="text-slate-400 hover:text-white p-1" aria-label="Zamknij okno konta">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <button id="login-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
-                Rozpocznij
-            </button>
+
+            <p class="text-slate-300 text-sm leading-relaxed mb-4">
+                Logowanie nie jest obowiązkowe — możesz słuchać muzyki bez konta. Połączenie ze wspólnym kontem <strong>rejson59.github.io</strong> pozwala bezpiecznie zapisać polubione utwory, playlisty i historię odtwarzania oraz przenosić je na inne urządzenia.
+            </p>
+
+            <!-- Guest / Disconnected / Network Error View -->
+            <div id="modal-guest-section" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-300">
+                    <div class="bg-slate-900/70 border border-slate-700/80 rounded-lg p-3 flex items-center gap-2">
+                        <i class="fas fa-heart text-red-400" aria-hidden="true"></i>
+                        <span>Zapisane polubione utwory</span>
+                    </div>
+                    <div class="bg-slate-900/70 border border-slate-700/80 rounded-lg p-3 flex items-center gap-2">
+                        <i class="fas fa-list text-blue-400" aria-hidden="true"></i>
+                        <span>Własne playlisty w chmurze</span>
+                    </div>
+                    <div class="bg-slate-900/70 border border-slate-700/80 rounded-lg p-3 flex items-center gap-2">
+                        <i class="fas fa-laptop-mobile text-emerald-400" aria-hidden="true"></i>
+                        <span>Historia na innych urządzeniach</span>
+                    </div>
+                </div>
+
+                <button id="modal-connect-button" type="button" data-account-connect class="rejson-login-btn w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-between gap-3">
+                    <span class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                            <i class="fas fa-user-shield" aria-hidden="true"></i>
+                        </span>
+                        <span class="text-left">Zaloguj się przez <strong>rejson59.github.io</strong></span>
+                    </span>
+                    <span aria-hidden="true" class="text-blue-700 font-bold">↗</span>
+                </button>
+
+                <button id="modal-retry-button" type="button" data-account-retry class="hidden w-full bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-rotate-right mr-2" aria-hidden="true"></i> Spróbuj ponownie
+                </button>
+            </div>
+
+            <!-- Connected Account View -->
+            <div id="modal-connected-section" class="hidden space-y-4">
+                <div class="bg-emerald-950/40 border border-emerald-700/60 rounded-xl p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
+                            <i class="fas fa-check" aria-hidden="true"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold truncate">Połączono jako <span id="modal-connected-username" class="text-emerald-300"></span></p>
+                            <p id="modal-sync-status" class="text-xs text-slate-300" role="status" aria-live="polite">Biblioteka zsynchronizowana z kontem.</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-emerald-800/40 text-center text-xs">
+                        <div>
+                            <div id="modal-liked-count" class="font-semibold text-white">0</div>
+                            <div class="text-slate-400">Ulubione</div>
+                        </div>
+                        <div>
+                            <div id="modal-playlists-count" class="font-semibold text-white">0</div>
+                            <div class="text-slate-400">Playlisty</div>
+                        </div>
+                        <div>
+                            <div id="modal-history-count" class="font-semibold text-white">0</div>
+                            <div class="text-slate-400">Historia</div>
+                        </div>
+                    </div>
+                    <button id="modal-sync-retry-button" type="button" data-sync-retry class="hidden mt-3 w-full bg-amber-600 hover:bg-amber-500 text-white py-2 px-3 rounded-lg text-xs font-semibold transition-colors">
+                        <i class="fas fa-rotate-right mr-1" aria-hidden="true"></i> Ponów synchronizację
+                    </button>
+                </div>
+
+                <!-- Optional Guest Data Migration Box inside Modal -->
+                <div id="modal-migration-box" class="hidden bg-blue-950/60 border border-blue-700/60 rounded-xl p-4 space-y-3">
+                    <p id="modal-migration-text" class="text-xs text-slate-200 leading-relaxed"></p>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="modal-migrate-button" type="button" class="bg-blue-600 hover:bg-blue-500 text-white py-1.5 px-3 rounded-lg text-xs font-semibold transition-colors">
+                            Zapisz lokalne dane na koncie
+                        </button>
+                        <button id="modal-skip-migration-button" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-1.5 px-3 rounded-lg text-xs font-medium transition-colors">
+                            Nie przenoś
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/80 border border-slate-700 rounded-xl p-4 space-y-3 text-xs text-slate-300">
+                    <p class="leading-relaxed">
+                        <strong class="text-white">Różnica między odłączeniem a wylogowaniem:</strong> odłączenie projektu kończy dostęp Jakuplayera do konta w tej przeglądarce i czyści wczytane dane z aplikacji, ale nie wylogowuje Cię ze strony <strong>rejson59.github.io</strong>. Pełne wylogowanie ze strony wykonasz w panelu konta.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <button id="modal-disconnect-button" type="button" data-account-disconnect class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 px-3 rounded-lg font-medium transition-colors">
+                            Odłącz konto w Jakuplayerze
+                        </button>
+                        <a id="modal-manage-link" href="/logowanie?zarzadzaj=1" class="flex-1 text-center bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 py-2 px-3 rounded-lg font-medium transition-colors">
+                            Zarządzaj kontem na stronie ↗
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <p id="modal-account-status" class="mt-4 text-xs text-amber-300 min-h-[1.25rem]" role="status" aria-live="polite"></p>
         </div>
     </div>
 
@@ -391,13 +497,13 @@
     <!-- Mobile Menu -->
     <div id="mobile-menu" class="mobile-menu fixed inset-0 z-40 md:hidden">
         <div class="absolute inset-0 bg-black/70" id="menu-backdrop"></div>
-        <div class="relative w-64 h-full bg-slate-900 p-4 flex flex-col">
+        <div class="relative w-72 max-w-[85vw] h-full bg-slate-900 p-4 flex flex-col overflow-y-auto">
             <div class="mb-8">
                 <h1 class="text-2xl font-bold text-blue-400">Jakuplayer</h1>
                 <p class="text-slate-400 text-sm">Nieograniczona muzyka</p>
             </div>
             
-            <nav class="mb-8 flex-1">
+            <nav class="mb-6 flex-1">
                 <ul class="space-y-2">
                     <li>
                         <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="home">
@@ -426,12 +532,43 @@
                 </ul>
             </nav>
 
-<div class="mt-auto">
-                <div class="p-4 bg-slate-800 rounded-lg">
-                    <h3 class="font-medium mb-2">Witaj, <span id="mobile-username">Użytkownik</span></h3>
-                    <button id="logout-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-full text-sm font-medium">
-                        Wyloguj się
-                    </button>
+            <div class="mt-auto">
+                <div class="p-3.5 bg-slate-800/90 border border-slate-700/80 rounded-xl space-y-2.5">
+                    <div id="mobile-account-guest" class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span id="mobile-guest-label" class="text-xs font-semibold text-blue-300">Tryb bez logowania</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Zapisz polubione utwory, playlisty i historię, aby przenosić je na inne urządzenia.
+                        </p>
+                        <button id="mobile-connect-button" type="button" data-account-connect class="rejson-login-btn w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between gap-2">
+                            <span>Zaloguj się przez rejson59.github.io</span>
+                            <span aria-hidden="true">↗</span>
+                        </button>
+                        <button id="mobile-retry-button" type="button" data-account-retry class="hidden w-full bg-slate-700 hover:bg-slate-600 text-white py-1.5 px-3 rounded-lg text-xs font-medium">
+                            Spróbuj ponownie
+                        </button>
+                    </div>
+
+                    <div id="mobile-account-connected" class="hidden space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-semibold truncate">Konto: <span id="mobile-username" class="text-emerald-300"></span></span>
+                            <span id="mobile-sync-badge" class="text-[11px] text-emerald-400 shrink-0">W chmurze</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="mobile-account-button" type="button" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 px-2.5 rounded-lg text-xs font-medium">
+                                Synchronizacja
+                            </button>
+                            <button id="mobile-disconnect-button" type="button" data-account-disconnect class="flex-1 bg-slate-700/70 hover:bg-red-900/60 text-slate-200 py-1.5 px-2.5 rounded-lg text-xs font-medium">
+                                Odłącz
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-snug">
+                            Odłączenie dotyczy tylko Jakuplayera.
+                        </p>
+                    </div>
+
+                    <p id="mobile-account-status" class="text-[11px] text-amber-300 empty:hidden" role="status" aria-live="polite"></p>
                 </div>
             </div>
         </div>
@@ -445,7 +582,7 @@
                 <p class="text-slate-400 text-sm">Nieograniczona muzyka</p>
             </div>
             
-            <nav class="mb-8 flex-1">
+            <nav class="mb-6 flex-1">
                 <ul class="space-y-2">
                     <li>
                         <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="home">
@@ -475,11 +612,42 @@
             </nav>
             
             <div class="mt-auto">
-                <div class="p-4 bg-slate-800 rounded-lg">
-                    <h3 class="font-medium mb-2">Witaj, <span id="desktop-username">Użytkownik</span></h3>
-                    <button id="desktop-logout-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-full text-sm font-medium">
-                        Wyloguj się
-                    </button>
+                <div class="p-3.5 bg-slate-800/90 border border-slate-700/80 rounded-xl space-y-2.5">
+                    <div id="desktop-account-guest" class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span id="desktop-guest-label" class="text-xs font-semibold text-blue-300">Tryb bez logowania</span>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            Zapisz polubione utwory, playlisty i historię, aby przenosić je na inne urządzenia.
+                        </p>
+                        <button id="desktop-connect-button" type="button" data-account-connect class="rejson-login-btn w-full py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-between gap-2">
+                            <span>Zaloguj się przez rejson59.github.io</span>
+                            <span aria-hidden="true">↗</span>
+                        </button>
+                        <button id="desktop-retry-button" type="button" data-account-retry class="hidden w-full bg-slate-700 hover:bg-slate-600 text-white py-1.5 px-3 rounded-lg text-xs font-medium transition-colors">
+                            Spróbuj ponownie
+                        </button>
+                    </div>
+
+                    <div id="desktop-account-connected" class="hidden space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-semibold truncate" title="Potwierdzone konto rejson59.github.io"><span id="desktop-username" class="text-emerald-300"></span></span>
+                            <span id="desktop-sync-badge" class="text-[11px] text-emerald-400 shrink-0">W chmurze</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="desktop-account-button" type="button" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-1.5 px-2.5 rounded-lg text-xs font-medium transition-colors">
+                                Konto
+                            </button>
+                            <button id="desktop-disconnect-button" type="button" data-account-disconnect class="flex-1 bg-slate-700/70 hover:bg-red-900/60 text-slate-200 py-1.5 px-2.5 rounded-lg text-xs font-medium transition-colors">
+                                Odłącz
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-snug">
+                            Odłączenie w Jakuplayerze nie wylogowuje ze strony.
+                        </p>
+                    </div>
+
+                    <p id="desktop-account-status" class="text-[11px] text-amber-300 empty:hidden" role="status" aria-live="polite"></p>
                 </div>
             </div>
         </div>
@@ -487,12 +655,12 @@
         <!-- Main content -->
         <div class="flex-1 flex flex-col overflow-hidden">
             <!-- Header -->
-            <header class="bg-slate-900 p-4 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <button id="mobile-menu-button" class="md:hidden text-slate-300">
+            <header class="bg-slate-900 p-4 flex items-center justify-between gap-3">
+                <div class="flex items-center space-x-4 flex-1 min-w-0">
+                    <button id="mobile-menu-button" class="md:hidden text-slate-300 shrink-0" aria-label="Otwórz menu">
                         <i class="fas fa-bars text-xl"></i>
                     </button>
-                    <div class="relative search-input-container">
+                    <div class="relative search-input-container flex-1 max-w-xl">
                         <input 
                             type="text" 
                             id="search-input" 
@@ -503,7 +671,7 @@
                     </div>
                 </div>
                 
-                <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
                     <div id="ad-block-status" class="hidden sm:flex items-center space-x-2 text-xs text-emerald-400" role="status" aria-live="polite" title="Wykryte reklamy są wyciszane i automatycznie pomijane, gdy YouTube na to pozwala">
                         <i class="fas fa-shield-alt" aria-hidden="true"></i>
                         <span id="ad-block-status-text" class="hidden lg:inline">Adblock aktywny</span>
@@ -512,22 +680,65 @@
                         <i class="fas fa-download" aria-hidden="true"></i>
                         <span class="tooltip-text">Wtyczka Chrome/Edge</span>
                     </a>
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                            <span class="font-medium" id="header-username-initial">U</span>
-                        </div>
-                        <span class="hidden md:inline text-sm font-medium" id="header-username">Użytkownik</span>
-                    </div>
+                    <button id="header-account-button" type="button" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full py-1 px-2.5 transition-colors" aria-label="Konto i synchronizacja">
+                        <span class="relative w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-semibold">
+                            <span id="header-username-initial"><i class="fas fa-cloud text-[11px]" aria-hidden="true"></i></span>
+                            <span id="header-account-dot" class="hidden absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>
+                        </span>
+                        <span class="hidden sm:inline text-xs font-medium max-w-[140px] truncate" id="header-username">Zapisz w chmurze</span>
+                    </button>
                 </div>
             </header>
             
             <!-- Content -->
             <main class="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-900 to-slate-800 player-controls">
+                <!-- Non-mandatory Cloud Sync Encouragement Banner (for guests) -->
+                <section id="sync-promo-banner" aria-label="Synchronizacja z kontem" class="mb-6 rounded-xl bg-gradient-to-r from-blue-950/90 via-slate-800/95 to-slate-800/90 border border-blue-800/60 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center justify-center shrink-0 mt-0.5">
+                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="text-sm font-semibold text-white">Zachowaj swoją bibliotekę między urządzeniami (opcjonalnie)</h2>
+                            <p id="sync-promo-text" class="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                                Możesz słuchać bez logowania. Zaloguj się przez rejson59.github.io, aby zapisać swoje polubione utwory, playlisty i historię oraz przenosić je na inne urządzenia.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                        <button id="banner-connect-button" type="button" data-account-connect class="rejson-login-btn py-2 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-2">
+                            <span>Zaloguj się przez rejson59.github.io</span>
+                            <span aria-hidden="true">↗</span>
+                        </button>
+                        <button id="dismiss-sync-promo" type="button" class="text-slate-400 hover:text-white p-2 rounded-lg" aria-label="Ukryj zachętę na czas tej wizyty" title="Ukryj na czas wizyty">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Guest Data Migration Prompt (shown after connecting account when local guest data exists) -->
+                <section id="guest-migration-banner" aria-label="Przeniesienie lokalnych danych" class="hidden mb-6 rounded-xl bg-emerald-950/60 border border-emerald-700/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
+                            <i class="fas fa-file-import" aria-hidden="true"></i>
+                        </div>
+                        <p id="guest-migration-text" class="text-xs text-slate-200 leading-relaxed"></p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="migrate-guest-data-button" type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3.5 rounded-lg text-xs font-semibold transition-colors">
+                            Zapisz na koncie
+                        </button>
+                        <button id="skip-guest-migration-button" type="button" class="bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 px-3 rounded-lg text-xs font-medium transition-colors">
+                            Nie przenoś
+                        </button>
+                    </div>
+                </section>
+
                 <!-- Welcome Page (shown only for first-time users) -->
                 <div id="welcome-page" class="page-content fade-in">
                     <div class="max-w-4xl mx-auto text-center mb-12">
                         <h1 class="text-4xl font-bold mb-4">Witaj w Jakuplayer!</h1>
-                        <p class="text-xl text-slate-300 mb-8">Odkryj świat nieograniczonej muzyki w jednym miejscu</p>
+                        <p class="text-xl text-slate-300 mb-8">Odkryj świat nieograniczonej muzyki — od razu, bez obowiązkowego logowania</p>
                         
                         <div class="welcome-card rounded-xl p-8 mb-12">
                             <div class="flex justify-center mb-6">
@@ -536,10 +747,19 @@
                                 </div>
                             </div>
                             <h2 class="text-2xl font-bold mb-4">Rozpocznij swoją muzyczną podróż</h2>
-                            <p class="text-slate-300 mb-6">Jakuplayer to miejsce, gdzie znajdziesz miliony utworów, tworzysz własne playlisty i odkrywasz nową muzykę.</p>
-                            <button id="start-listening-button" class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-8 rounded-full font-medium text-lg transition-colors">
-                                Zacznij słuchać muzyki <i class="fas fa-arrow-right ml-2"></i>
-                            </button>
+                            <p class="text-slate-300 mb-6">Jakuplayer to miejsce, gdzie słuchasz ulubionych utworów, tworzysz własne playlisty i wracasz do historii odtwarzania — lokalnie lub na wspólnym koncie między urządzeniami.</p>
+                            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                                <button id="start-listening-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white py-3 px-8 rounded-full font-medium text-lg transition-colors">
+                                    Zacznij słuchać muzyki <i class="fas fa-arrow-right ml-2"></i>
+                                </button>
+                                <button id="welcome-connect-button" type="button" data-account-connect class="rejson-login-btn py-3 px-6 rounded-full font-semibold text-sm inline-flex items-center gap-2">
+                                    <span>Zaloguj się przez rejson59.github.io</span>
+                                    <span aria-hidden="true">↗</span>
+                                </button>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-4">
+                                Logowanie jest opcjonalne — przydaje się, gdy chcesz zapisać polubione utwory, playlisty i historię na innych urządzeniach.
+                            </p>
                         </div>
                         
                         <h2 class="text-2xl font-bold mb-8">Dlaczego warto wybrać Jakuplayer?</h2>
@@ -549,24 +769,24 @@
                                 <div class="w-12 h-12 bg-blue-900 rounded-full flex items-center justify-center mb-4 mx-auto">
                                     <i class="fas fa-infinity text-blue-400"></i>
                                 </div>
-                                <h3 class="font-bold text-lg mb-2">Nieograniczona muzyka</h3>
-                                <p class="text-slate-300">Dostęp do milionów utworów z całego świata w jednym miejscu.</p>
+                                <h3 class="font-bold text-lg mb-2">Bez obowiązkowego konta</h3>
+                                <p class="text-slate-300">Wchodzisz i słuchasz od razu — bez formularzy blokujących dostęp do muzyki.</p>
                             </div>
                             
                             <div class="feature-card p-6 rounded-xl">
                                 <div class="w-12 h-12 bg-blue-900 rounded-full flex items-center justify-center mb-4 mx-auto">
-                                    <i class="fas fa-headphones text-blue-400"></i>
+                                    <i class="fas fa-shield-alt text-blue-400"></i>
                                 </div>
-                                <h3 class="font-bold text-lg mb-2">Wysoka jakość</h3>
-                                <p class="text-slate-300">Odtwarzaj muzykę w najlepszej możliwej jakości dźwięku.</p>
+                                <h3 class="font-bold text-lg mb-2">Ochrona przed reklamami</h3>
+                                <p class="text-slate-300">Wbudowana ochrona wycisza i pomija przerwy reklamowe w odtwarzaczu.</p>
                             </div>
                             
                             <div class="feature-card p-6 rounded-xl">
                                 <div class="w-12 h-12 bg-blue-900 rounded-full flex items-center justify-center mb-4 mx-auto">
-                                    <i class="fas fa-list-ul text-blue-400"></i>
+                                    <i class="fas fa-cloud text-blue-400"></i>
                                 </div>
-                                <h3 class="font-bold text-lg mb-2">Personalizacja</h3>
-                                <p class="text-slate-300">Twórz własne playlisty i zapisuj ulubione utwory.</p>
+                                <h3 class="font-bold text-lg mb-2">Synchronizacja na życzenie</h3>
+                                <p class="text-slate-300">Połącz konto rejson59.github.io, aby przenosić ulubione, playlisty i historię między urządzeniami.</p>
                             </div>
                         </div>
                     </div>
@@ -574,7 +794,7 @@
                 
                 <!-- Home Page -->
                 <div id="home-page" class="page-content hidden fade-in">
-                    <h2 class="text-2xl font-bold mb-6">Witaj, <span id="welcome-username">Użytkowniku</span></h2>
+                    <h2 id="home-greeting" class="text-2xl font-bold mb-2">Czego dziś słuchamy?</h2>
                     <p class="text-slate-300 mb-6">Wyszukaj swoją ulubioną muzykę w polu wyszukiwania powyżej.</p>
                     
                     <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -626,7 +846,7 @@
                 </div>
             </main>
 
-<!-- Player - Desktop -->
+            <!-- Player - Desktop -->
             <div class="player-container p-4 border-t border-slate-700 hidden md:block">
                 <div class="flex flex-col">
                     <!-- Progress bar -->
@@ -642,9 +862,9 @@
                             <div id="current-song-image" class="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center">
                                 <i class="fas fa-music text-slate-500"></i>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <div id="current-song-title" class="font-medium text-sm truncate">Nie wybrano utworu</div>
-                                <div id="current-song-artist" class="text-slate-400 text-xs">Wybierz utwór z listy</div>
+                                <div id="current-song-artist" class="text-slate-400 text-xs truncate">Wybierz utwór z listy</div>
                             </div>
                             <div class="flex space-x-2">
                                 <button id="like-button" class="text-slate-400 hover:text-red-500 tooltip">
@@ -727,31 +947,32 @@
                             <i class="fas fa-plus text-xl"></i>
                         </button>
                     </div>
-                <!-- Mobile Progress Bar -->
-                <div class="mobile-progress-container mt-3">
-                    <div class="flex items-center space-x-2">
-                        <span id="mobile-current-time" class="text-xs text-slate-400 w-10">0:00</span>
-                        <div class="flex-1 relative h-4">
-                            <input type="range" 
-                                   id="mobile-progress-bar" 
-                                   class="mobile-progress-bar w-full absolute top-0 left-0 h-full opacity-0 z-10" 
-                                   min="0" 
-                                   max="100" 
-                                   value="0">
-                            <div class="progress-track absolute top-1/2 left-0 w-full h-1 bg-slate-700 rounded-full transform -translate-y-1/2"></div>
-                            <div id="mobile-progress-fill" class="progress-fill absolute top-1/2 left-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transform -translate-y-1/2" style="width: 0%"></div>
+                    <!-- Mobile Progress Bar -->
+                    <div class="mobile-progress-container mt-3">
+                        <div class="flex items-center space-x-2">
+                            <span id="mobile-current-time" class="text-xs text-slate-400 w-10">0:00</span>
+                            <div class="flex-1 relative h-4">
+                                <input type="range" 
+                                       id="mobile-progress-bar" 
+                                       class="mobile-progress-bar w-full absolute top-0 left-0 h-full opacity-0 z-10" 
+                                       min="0" 
+                                       max="100" 
+                                       value="0">
+                                <div class="progress-track absolute top-1/2 left-0 w-full h-1 bg-slate-700 rounded-full transform -translate-y-1/2"></div>
+                                <div id="mobile-progress-fill" class="progress-fill absolute top-1/2 left-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transform -translate-y-1/2" style="width: 0%"></div>
+                            </div>
+                            <span id="mobile-duration" class="text-xs text-slate-400 w-10">0:00</span>
                         </div>
-                        <span id="mobile-duration" class="text-xs text-slate-400 w-10">0:00</span>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    </div>
 
     <div id="toast" class="hidden fixed top-20 left-1/2 z-[70] max-w-[calc(100%_-_2rem)] -translate-x-1/2 rounded-lg bg-slate-700 px-4 py-3 text-sm text-white shadow-xl pointer-events-none" role="status" aria-live="polite"></div>
 
-    <script src="ad-blocker.js"></script>
-    <script src="app.js"></script>
+    <script defer src="/js/rejson-account.js?v=1"></script>
+    <script defer src="ad-blocker.js"></script>
+    <script defer src="app.js"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ function createApp(options = {}) {
     const { window } = dom;
     const players = [];
 
-    Object.entries(options.storage || { username: 'Test user', isFirstVisit: 'false' })
+    Object.entries(options.storage || { isFirstVisit: 'false' })
         .forEach(([key, value]) => window.localStorage.setItem(key, value));
     window.prompt = () => options.playlistName || 'Test playlist';
     window.confirm = () => true;
@@ -142,7 +142,8 @@ test('initializes safely with corrupted local storage', async (t) => {
     closeApp(t, app);
     await app.ready();
 
-    assert.equal(app.window.document.getElementById('login-modal').classList.contains('open'), false);
+    assert.equal(app.window.document.getElementById('account-modal').classList.contains('open'), false);
+    assert.equal(app.window.localStorage.getItem('username'), null);
     assert.equal(app.window.document.getElementById('home-page').classList.contains('hidden'), false);
     assert.equal(app.window.document.getElementById('favorites-count').textContent, '0 utworów');
     assert.equal(app.window.document.getElementById('history-count').textContent, '0 utworów');
