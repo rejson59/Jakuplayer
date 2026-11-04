@@ -195,10 +195,11 @@ function closeHarness(t, harness) {
 
 test('includes explicit RejsonAccount script before app scripts and removes legacy username login', () => {
     const accountScriptIdx = html.indexOf('<script defer src="/js/rejson-account.js?v=1"></script>');
-    const adBlockerIdx = html.indexOf('<script defer src="ad-blocker.js"></script>');
-    const appIdx = html.indexOf('<script defer src="app.js"></script>');
+    const adBlockerIdx = html.search(/<script defer src="ad-blocker\.js\?v=[^"]+"><\/script>/);
+    const appIdx = html.search(/<script defer src="app\.js\?v=[^"]+"><\/script>/);
 
     assert.ok(accountScriptIdx !== -1, 'index.html must explicitly load /js/rejson-account.js?v=1');
+    assert.ok(adBlockerIdx !== -1 && appIdx !== -1, 'project scripts must use versioned URLs');
     assert.ok(accountScriptIdx < adBlockerIdx && adBlockerIdx < appIdx, 'rejson-account.js must precede project scripts');
     assert.equal(html.includes('id="login-modal"'), false, 'legacy mandatory login modal must be removed');
     assert.equal(html.includes('id="username"'), false, 'legacy unverified username input must be removed');
