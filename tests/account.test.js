@@ -563,3 +563,68 @@ test('gracefully informs user on non-rejson59 origin when RejsonAccount is unava
     assert.equal(h.document.getElementById('desktop-account-connected').classList.contains('hidden'), true);
     assert.match(h.document.getElementById('desktop-account-status').textContent, /rejson59\.github\.io\/Jakuplayer/);
 });
+
+test('clearing history saves to the connected account and switching accounts drops its queue', async (t) => {
+    const one = { id: 'private-one', title: 'Prywatny jeden', artist: 'A', thumbnail: '' };
+    const two = { id: 'private-two', title: 'Prywatny dwa', artist: 'A', thumbnail: '' };
+    const h = createAccountHarness({
+        session: { username: 'Alice', token: ALICE_TOKEN },
+        initialServerData: {
+            Alice: { liked_songs: [one, two], playlists: [], history: [one] },
+            Bob: { liked_songs: [], playlists: [], history: [] }
+        }
+    });
+    closeHarness(t, h);
+    await h.settle();
+    h.document.getElementById('clear-history-button').click();
+    await h.settle();
+    assert.deepEqual(h.serverDb.get('Alice').history, []);
+    h.document.getElementById('play-favorites-button').click();
+    assert.match(h.document.getElementById('queue-results').textContent, /Prywatny dwa/);
+    h.setSession({ username: 'Bob', token: BOB_TOKEN });
+    h.notifyAccountChange();
+    await h.settle();
+    assert.doesNotMatch(h.document.getElementById('queue-results').textContent, /Prywatny dwa/);
+});
+
+test('restores a playback snapshot only after the matching account is verified', async (t) => {
+    const pending = deferred();
+    const saved = JSON.stringify({ version: 1, owner: 'Alice', queue: [{ id: 'private-id', title: 'Prywatny utwór', artist: 'A' }], index: 0, position: 25 });
+    const h = createAccountHarness({ sessionStorage: { jakuplayer_playback_session_v1: saved }, getSession: () => pending.promise });
+    closeHarness(t, h);
+    await h.settle();
+    assert.doesNotMatch(h.document.getElementById('queue-results').textContent, /Prywatny/);
+    pending.resolve({ username: 'Bob', token: BOB_TOKEN });
+    await h.settle();
+    assert.doesNotMatch(h.document.getElementById('queue-results').textContent, /Prywatny/);
+    h.window.dispatchEvent(new h.window.Event('pagehide'));
+    assert.equal(h.window.sessionStorage.getItem('jakuplayer_playback_session_v1'), saved, 'mismatched snapshot is not overwritten while idle');
+
+    const same = createAccountHarness({ sessionStorage: { jakuplayer_playback_session_v1: saved }, session: { username: 'Alice', token: ALICE_TOKEN } });
+    closeHarness(t, same);
+    await same.settle();
+    assert.match(same.document.getElementById('queue-results').textContent, /Prywatny/);
+    assert.equal(same.document.getElementById('current-time').textContent, '0:25');
+    same.document.getElementById('desktop-disconnect-button').click();
+    assert.equal(same.window.sessionStorage.getItem('jakuplayer_playback_session_v1'), null);
+});
+
+test('stale recommendations are discarded after an account switch', async (t) => {
+    const wait = deferred();
+    const h = createAccountHarness({
+        session: { username: 'Alice', token: ALICE_TOKEN },
+        initialServerData: { Alice: { history: [{ id: 'old', title: 'Stary', artist: 'Prywatny wykonawca' }] } }
+    });
+    closeHarness(t, h);
+    await h.settle();
+    const oldFetch = h.window.fetch;
+    h.window.fetch = (url, init) => String(url).includes('youtube/v3/search') ? wait.promise : oldFetch(url, init);
+    h.document.getElementById('recommendations-button').click();
+    h.setSession({ username: 'Bob', token: BOB_TOKEN });
+    h.notifyAccountChange();
+    await h.settle();
+    wait.resolve({ ok: true, json: async () => ({ items: [searchItem('stale', 'Stara propozycja')] }) });
+    await h.settle();
+    assert.doesNotMatch(h.document.getElementById('recommendations-results').textContent, /Stara/);
+    assert.doesNotMatch(h.document.getElementById('recommendations-description').textContent, /Prywatny/);
+});

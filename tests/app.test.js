@@ -24,7 +24,7 @@ function searchItem(id, title, channel = 'Channel') {
 
 function createApp(options = {}) {
     const dom = new JSDOM(html, {
-        url: 'https://jakuplayer.test/',
+        url: options.url || 'https://jakuplayer.test/',
         runScripts: 'outside-only',
         pretendToBeVisual: true
     });
@@ -33,8 +33,14 @@ function createApp(options = {}) {
 
     Object.entries(options.storage || { isFirstVisit: 'false' })
         .forEach(([key, value]) => window.localStorage.setItem(key, value));
-    window.prompt = () => options.playlistName || 'Test playlist';
-    window.confirm = () => true;
+    Object.entries(options.sessionStorage || {}).forEach(([key, value]) => window.sessionStorage.setItem(key, value));
+    window.prompt = options.prompt || (() => options.playlistName || 'Test playlist');
+    if (options.clipboard) Object.defineProperty(window.navigator, 'clipboard', { value: options.clipboard });
+    window.confirm = options.confirm || (() => true);
+    if (options.mediaSession) {
+        Object.defineProperty(window.navigator, 'mediaSession', { value: options.mediaSession });
+        window.MediaMetadata = class MediaMetadata { constructor(data) { Object.assign(this, data); } };
+    }
     window.fetch = options.fetch || (async () => ({
         ok: true,
         status: 200,
@@ -114,7 +120,7 @@ function createApp(options = {}) {
     };
 
     window.eval(adBlockerSource);
-    window.eval(`${appSource}\n;window.__appTest = { displaySearchResults, searchYouTube };`);
+    window.eval(`${appSource}\n;window.__appTest = { displaySearchResults, searchYouTube, checkSleepTimer, encodeSharedPlaylist, decodeSharedPlaylist };`);
 
     return {
         dom,
@@ -395,4 +401,233 @@ test('mobile player avoids widget overlap and playback controls stay in sync', a
     doc.getElementById('next-button').click();
     doc.getElementById('prev-button').click();
     assert.deepEqual(app.players[0].loadCalls, ['jfKfPfyJRdk', '4xDzrJKXOOY', 'jfKfPfyJRdk']);
+});
+
+test('queue supports adding, reordering, duplicates, removal and clearing', async (t) => {
+    const app = createApp();
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    app.api.displaySearchResults([searchItem('one', 'One'), searchItem('two', 'Two')]);
+    const cards = doc.querySelectorAll('#search-results .song-card');
+    cards[0].querySelector('.queue-add-button').click();
+    cards[0].querySelector('.queue-add-button').click();
+    cards[1].querySelector('.queue-add-button').click();
+    assert.equal(app.players[0].loadCalls.length, 0, 'adding does not start playback');
+    doc.querySelector('[data-page="queue"]').click();
+    const queue = doc.getElementById('queue-results');
+    assert.equal(queue.children.length, 3);
+    queue.children[2].querySelector('.queue-up').click();
+    assert.match(queue.children[1].textContent, /Two/);
+    doc.getElementById('play-button').click();
+    doc.getElementById('next-button').click();
+    doc.getElementById('next-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['one', 'two', 'one'], 'duplicate IDs use their queue position');
+    assert.equal(queue.children[2].querySelector('.queue-remove').disabled, true);
+    queue.children[0].querySelector('.queue-remove').click();
+    assert.equal(queue.children.length, 2);
+    doc.getElementById('prev-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['one', 'two', 'one', 'two']);
+    doc.getElementById('clear-queue-button').click();
+    assert.equal(queue.children.length, 1);
+    assert.match(queue.textContent, /Two/);
+    assert.match(queue.textContent, /Teraz odtwarzane/);
+});
+
+test('favorites and playlist play buttons and confirmed history clearing work in guest mode', async (t) => {
+    let confirmed = false;
+    const song = { id: 'fav-id', title: 'Ulubiony', artist: 'Artysta', thumbnail: '' };
+    const app = createApp({
+        storage: { isFirstVisit: 'false', likedSongs: JSON.stringify([song]),
+            playlists: JSON.stringify([{ id: 'p', name: 'Moja', songs: [song] }]),
+            recentlyPlayed: JSON.stringify([song]) },
+        confirm: () => confirmed
+    });
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    doc.getElementById('play-favorites-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['fav-id']);
+    doc.querySelector('#playlists-results [role="button"]').click();
+    doc.getElementById('play-playlist-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['fav-id', 'fav-id']);
+    assert.equal(doc.getElementById('playlist-detail-modal').classList.contains('open'), false);
+    doc.getElementById('clear-history-button').click();
+    assert.equal(JSON.parse(app.window.localStorage.getItem('recentlyPlayed')).length, 1);
+    confirmed = true;
+    doc.getElementById('clear-history-button').click();
+    assert.deepEqual(JSON.parse(app.window.localStorage.getItem('recentlyPlayed')), []);
+    assert.match(doc.getElementById('history-results').textContent, /Brak historii/);
+});
+
+test('media session exposes metadata and controls when supported', async (t) => {
+    const handlers = {};
+    const mediaSession = { setActionHandler(action, callback) { handlers[action] = callback; } };
+    const app = createApp({ mediaSession });
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    app.api.displaySearchResults([searchItem('one', 'First'), searchItem('two', 'Second')]);
+    doc.querySelector('#search-results .song-card').click();
+    assert.equal(mediaSession.metadata.title, 'First');
+    assert.equal(mediaSession.playbackState, 'playing');
+    handlers.pause();
+    assert.equal(mediaSession.playbackState, 'paused');
+    handlers.play();
+    handlers.nexttrack();
+    assert.equal(mediaSession.metadata.title, 'Second');
+    handlers.previoustrack();
+    assert.deepEqual(app.players[0].loadCalls, ['one', 'two', 'one']);
+});
+
+test('restores queue and position on refresh without autoplay', async (t) => {
+    const first = createApp();
+    closeApp(t, first);
+    await first.ready();
+    const doc = first.window.document;
+    doc.querySelector('#search-results .song-card').click();
+    first.players[0].currentTime = 42;
+    first.window.dispatchEvent(new first.window.Event('pagehide'));
+    const saved = first.window.sessionStorage.getItem('jakuplayer_playback_session_v1');
+    assert.equal(JSON.parse(saved).position, 42);
+    const second = createApp({ sessionStorage: { jakuplayer_playback_session_v1: saved } });
+    closeApp(t, second);
+    await second.ready();
+    assert.equal(second.players[0].loadCalls.length, 0);
+    assert.match(second.window.document.getElementById('current-song-title').textContent, /lofi/i);
+    assert.equal(second.window.document.querySelectorAll('#queue-results .queue-play').length, 6);
+    second.window.document.getElementById('play-button').click();
+    assert.equal(second.players[0].loadCalls[0].videoId, 'jfKfPfyJRdk');
+    assert.equal(second.players[0].loadCalls[0].startSeconds, 42);
+});
+
+test('sleep timer pauses playback, can be cancelled and handles an unready player', async (t) => {
+    const app = createApp();
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    let now = 1000;
+    app.window.Date.now = () => now;
+    doc.getElementById('play-button').click();
+    const timer = doc.getElementById('sleep-timer');
+    timer.value = '15'; timer.dispatchEvent(new app.window.Event('change'));
+    now += 14 * 60000;
+    app.api.checkSleepTimer();
+    assert.equal(app.players[0].pauseCalls, 0);
+    timer.value = '0'; timer.dispatchEvent(new app.window.Event('change'));
+    now += 60000; app.api.checkSleepTimer();
+    assert.equal(app.players[0].pauseCalls, 0);
+    timer.value = '15'; timer.dispatchEvent(new app.window.Event('change'));
+    now += 15 * 60000; app.api.checkSleepTimer();
+    assert.equal(app.players[0].pauseCalls, 1);
+    assert.equal(timer.value, '0');
+    assert.match(doc.getElementById('sleep-timer-status').textContent, /zatrzymane/);
+
+    const pending = createApp({ autoReady: false });
+    closeApp(t, pending);
+    let later = 1000;
+    pending.window.Date.now = () => later;
+    pending.window.document.getElementById('play-button').click();
+    const pendingTimer = pending.window.document.getElementById('sleep-timer');
+    pendingTimer.value = '15'; pendingTimer.dispatchEvent(new pending.window.Event('change'));
+    later += 15 * 60000; pending.api.checkSleepTimer();
+    pending.players[0].ready();
+    assert.equal(pending.players[0].loadCalls.length, 0, 'timer must prevent deferred autoplay');
+});
+
+test('shares a playlist as a validated snapshot and imports only after consent', async (t) => {
+    let copied = '';
+    const song = { id: 'K4DyBUG242c', title: 'Piosenka <test>', artist: 'Łódź', thumbnail: '' };
+    const app = createApp({
+        storage: { isFirstVisit: 'false', playlists: JSON.stringify([{ id: 'p', name: 'Muzyka ❤️', songs: [song] }]) },
+        clipboard: { async writeText(value) { copied = value; } }
+    });
+    closeApp(t, app);
+    await app.ready();
+    app.window.document.querySelector('#playlists-results [role="button"]').click();
+    app.window.document.getElementById('share-playlist-button').click();
+    await app.ready();
+    assert.match(copied, /#playlist=/);
+    const guest = createApp({ url: copied, storage: {} });
+    closeApp(t, guest);
+    await guest.ready();
+    const doc = guest.window.document;
+    assert.equal(doc.getElementById('home-page').classList.contains('hidden'), false);
+    assert.match(doc.getElementById('shared-playlist-title').textContent, /Muzyka ❤️/);
+    assert.match(doc.getElementById('shared-playlist-tracks').textContent, /Piosenka <test> — Łódź/);
+    assert.equal(doc.querySelector('#shared-playlist-tracks test'), null);
+    assert.equal(guest.window.localStorage.getItem('playlists'), null);
+    doc.getElementById('import-shared-button').click();
+    const imported = JSON.parse(guest.window.localStorage.getItem('playlists'));
+    assert.equal(imported[0].songs[0].id, song.id);
+    assert.equal(imported[0].songs[0].title, song.title);
+    assert.equal(guest.window.location.hash, '');
+    assert.equal(app.api.decodeSharedPlaylist('not-valid'), null);
+});
+
+test('filters and sorts favorites and playlists without changing stored order', async (t) => {
+    const songs = [{ id: '1', title: 'Żaba', artist: 'Zulu' }, { id: '2', title: 'Ala', artist: 'Alfa' }];
+    const playlists = [{ id: '1', name: 'Żółta', songs }, { id: '2', name: 'Alfa', songs: [] }];
+    const app = createApp({ storage: { isFirstVisit: 'false', likedSongs: JSON.stringify(songs), playlists: JSON.stringify(playlists) } });
+    closeApp(t, app);
+    await app.ready();
+    const doc = app.window.document;
+    const sort = doc.getElementById('favorites-sort'); sort.value = 'title'; sort.dispatchEvent(new app.window.Event('change'));
+    assert.equal(doc.querySelector('#favorites-results h4').textContent, 'Ala');
+    const filter = doc.getElementById('favorites-filter'); filter.value = 'zulu'; filter.dispatchEvent(new app.window.Event('input'));
+    assert.equal(doc.querySelectorAll('#favorites-results .song-card').length, 1);
+    doc.getElementById('play-favorites-button').click();
+    assert.deepEqual(app.players[0].loadCalls, ['1']);
+    const psort = doc.getElementById('playlists-sort'); psort.value = 'name'; psort.dispatchEvent(new app.window.Event('change'));
+    assert.equal(doc.querySelector('#playlists-results h3').textContent, 'Alfa');
+    const pfilter = doc.getElementById('playlists-filter'); pfilter.value = 'żół'; pfilter.dispatchEvent(new app.window.Event('input'));
+    assert.equal(doc.querySelectorAll('#playlists-results [role="button"]').length, 1);
+    assert.equal(JSON.parse(app.window.localStorage.getItem('likedSongs'))[0].title, 'Żaba');
+    assert.equal(JSON.parse(app.window.localStorage.getItem('playlists'))[0].name, 'Żółta');
+});
+
+test('recommendations are requested explicitly from the recent artist and omit history', async (t) => {
+    const urls = [];
+    const recent = { id: 'old-id', title: 'Old', artist: 'Mój Wykonawca', thumbnail: '' };
+    const app = createApp({ storage: { isFirstVisit: 'false', recentlyPlayed: JSON.stringify([recent]) }, fetch: async (url) => {
+        urls.push(url);
+        return { ok: true, json: async () => ({ items: [searchItem('old-id', 'Old'), searchItem('new-id', 'New')] }) };
+    } });
+    closeApp(t, app);
+    await app.ready();
+    assert.equal(urls.length, 0);
+    app.window.document.getElementById('recommendations-button').click();
+    await app.ready();
+    assert.match(urls[0], /M%C3%B3j%20Wykonawca/);
+    assert.equal(app.window.document.querySelectorAll('#recommendations-results .song-card').length, 1);
+    assert.equal(app.window.document.querySelector('#recommendations-results h4').textContent, 'New');
+    app.window.document.querySelector('#recommendations-results .song-card').click();
+    assert.deepEqual(app.players[0].loadCalls, ['new-id']);
+});
+
+test('resuming before player readiness waits for the player, and invalid snapshots are ignored', async (t) => {
+    const saved = JSON.stringify({ version: 1, owner: null, queue: [{ id: 'K4DyBUG242c', title: 'Song', artist: 'Artist' }], index: 0, position: 31 });
+    const app = createApp({ autoReady: false, sessionStorage: { jakuplayer_playback_session_v1: saved } });
+    closeApp(t, app);
+    app.window.document.getElementById('play-button').click();
+    assert.equal(app.players[0].loadCalls.length, 0);
+    app.players[0].ready();
+    assert.equal(app.players[0].loadCalls[0].startSeconds, 31);
+    const invalid = createApp({ sessionStorage: { jakuplayer_playback_session_v1: '{bad-json' } });
+    closeApp(t, invalid);
+    await invalid.ready();
+    assert.match(invalid.window.document.getElementById('queue-results').textContent, /Kolejka jest pusta/);
+});
+
+test('large shared links safely fall back to IDs and reject malformed links', (t) => {
+    const app = createApp();
+    closeApp(t, app);
+    const songs = Array.from({ length: 300 }, (_, i) => ({ id: String(i).padStart(11, '0'), title: 'Długi tytuł '.repeat(15), artist: 'Długi wykonawca '.repeat(10) }));
+    const encoded = app.api.encodeSharedPlaylist({ name: 'Duża', songs });
+    assert.ok(encoded.length <= 9000);
+    const decoded = app.api.decodeSharedPlaylist(encoded);
+    assert.equal(decoded.songs.length, 300);
+    assert.match(decoded.songs[0].title, /Utwór YouTube/);
+    assert.equal(app.api.decodeSharedPlaylist('a'.repeat(9001)), null);
+    assert.equal(app.api.encodeSharedPlaylist({ name: 'Nieprawidłowa', songs: [{ id: 'bad' }] }), null);
 });

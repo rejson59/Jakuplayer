@@ -10,6 +10,15 @@ npm start
 
 Aplikacja działa bez procesu budowania. Serwer nasłuchuje na porcie `3000` i udostępnia `index.html`.
 
+## Kolejka i sterowanie
+
+- Przycisk kolejki przy utworze dodaje go na koniec kolejki. W menu **Kolejka** można odtworzyć utwór, zmienić kolejność i usuwać pozycje. Wyczyszczenie zachowuje aktualny utwór. Kolejka i pozycja (maksymalnie 500 utworów) są zapisywane w `sessionStorage` bieżącej karty i przywracane po odświeżeniu; wznowienie wymaga naciśnięcia Play. Nie są synchronizowane między urządzeniami i mogą zniknąć po zamknięciu karty. Stan powiązany z kontem jest przywracany dopiero po weryfikacji tego samego konta; nie zawiera tokenu.
+- Timer snu znajduje się w widoku kolejki. Zatrzymuje odtwarzanie po 15, 30, 60 lub 90 minutach; działa tylko, gdy karta pozostaje otwarta, i nie jest przywracany po odświeżeniu. Wstrzymanie może się opóźnić, jeśli przeglądarka uśpi kartę.
+- Ulubione i playlisty można filtrować i sortować bez zmiany zapisanej kolejności. Przycisk odtwarzania ulubionych uwzględnia filtr i sortowanie. Historię można wyczyścić po potwierdzeniu; dla połączonego konta zmiana jest synchronizowana.
+- W szczegółach playlisty można skopiować link zawierający jej **publiczną kopię**. Odbiorca może odtworzyć lub zapisać kopię bez logowania; późniejsze zmiany nie są synchronizowane. Każdy posiadacz linku widzi utwory. Link może być długi, a dla większych playlist zawiera tylko identyfikatory filmów zamiast tytułów i wykonawców. Odtwarzanie zależy od dostępności i osadzania filmów w YouTube.
+- Przycisk **Pokaż propozycje** wyszukuje w YouTube utwory według ostatniego znanego wykonawcy z historii, wykluczając utwory już w historii. Zapytanie jest wysyłane dopiero po kliknięciu; wyniki zależą od YouTube Data API i limitu jego zapytań.
+- W przeglądarkach obsługujących Media Session tytuł i przyciski odtwarzania są dostępne również w systemowym panelu multimediów. Dostępność zależy od przeglądarki i systemu.
+
 ## Wspólne konto `rejson59.github.io` i synchronizacja
 
 Logowanie w Jakuplayerze **nie jest obowiązkowe** — z wyszukiwarki, odtwarzacza, ulubionych, playlist i historii można korzystać od razu lokalnie na urządzeniu.
