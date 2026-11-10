@@ -486,6 +486,9 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            <button id="play-playlist-button" type="button" class="w-full mb-4 bg-blue-600 hover:bg-blue-500 text-white py-2.5 px-4 rounded-lg font-semibold transition-colors"><i class="fas fa-play mr-2" aria-hidden="true"></i> Odtwórz playlistę</button>
+            <button id="share-playlist-button" type="button" class="w-full mb-3 border border-slate-600 hover:bg-slate-700 text-white py-2 px-4 rounded-lg text-sm">Udostępnij playlistę</button>
+            <p class="text-xs text-slate-400 mb-4">Link zawiera kopię playlisty. Każda osoba z linkiem może ją zobaczyć.</p>
             <div id="playlist-detail-content" class="space-y-2">
                 <!-- Playlist songs will be loaded here -->
             </div>
@@ -527,6 +530,12 @@
                         <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="playlists">
                             <i class="fas fa-list"></i>
                             <span>Playlisty</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="queue">
+                            <i class="fas fa-stream" aria-hidden="true"></i>
+                            <span>Kolejka</span>
                         </a>
                     </li>
                     <li>
@@ -606,6 +615,12 @@
                         <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="playlists">
                             <i class="fas fa-list"></i>
                             <span>Playlisty</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="flex items-center space-x-3 p-2 rounded-lg text-slate-300 hover:bg-slate-800 menu-link" data-page="queue">
+                            <i class="fas fa-stream" aria-hidden="true"></i>
+                            <span>Kolejka</span>
                         </a>
                     </li>
                     <li>
@@ -824,6 +839,23 @@
                         <button type="button" data-quick-search="Electronic dance music" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full transition-colors">Elektroniczna</button>
                     </div>
                     
+                    <section id="shared-playlist-section" class="hidden mb-6 p-4 rounded-xl border border-blue-500/50 bg-slate-800" aria-labelledby="shared-playlist-title">
+                        <h3 id="shared-playlist-title" class="font-semibold text-lg"></h3>
+                        <p id="shared-playlist-description" class="text-sm text-slate-300 mt-1"></p>
+                        <ul id="shared-playlist-tracks" class="mt-3 max-h-40 overflow-y-auto text-sm text-slate-300 space-y-1" aria-label="Utwory w udostępnionej playliście"></ul>
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            <button id="play-shared-button" type="button" class="bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2 text-sm">Odtwórz</button>
+                            <button id="import-shared-button" type="button" class="bg-slate-700 hover:bg-slate-600 rounded-lg px-4 py-2 text-sm">Zapisz kopię</button>
+                            <button id="dismiss-shared-button" type="button" class="text-slate-300 px-3 py-2 text-sm">Zamknij</button>
+                        </div>
+                    </section>
+                    <section class="mb-6 p-4 rounded-xl border border-slate-700 bg-slate-800/60" aria-labelledby="recommendations-title">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div><h3 id="recommendations-title" class="font-semibold">Odkrywaj na podstawie historii</h3><p id="recommendations-description" class="text-slate-400 text-sm">Wyszukaj propozycje podobne do ostatnio słuchanego wykonawcy.</p></div>
+                            <button id="recommendations-button" type="button" class="border border-slate-600 hover:bg-slate-700 rounded-lg px-4 py-2 text-sm">Pokaż propozycje</button>
+                        </div>
+                        <div id="recommendations-results" class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3" aria-live="polite"></div>
+                    </section>
                     <div id="search-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div class="text-slate-400 italic">Wpisz czego szukasz w polu wyszukiwania</div>
                     </div>
@@ -833,9 +865,16 @@
                 <div id="favorites-page" class="page-content hidden fade-in">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-2xl font-bold">Ulubione utwory</h2>
-                        <div id="favorites-count" class="text-slate-400 text-sm"></div>
+                        <div class="flex items-center gap-3">
+                            <div id="favorites-count" class="text-slate-400 text-sm"></div>
+                            <button id="play-favorites-button" type="button" class="bg-blue-600 hover:bg-blue-500 rounded-full px-4 py-2 text-sm font-medium">Odtwórz</button>
+                        </div>
                     </div>
                     
+                    <div class="flex flex-wrap gap-3 mb-5">
+                        <input id="favorites-filter" type="search" placeholder="Filtruj tytuł lub wykonawcę" aria-label="Filtruj ulubione" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 min-w-0">
+                        <label class="text-sm text-slate-300">Sortuj <select id="favorites-sort" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2"><option value="default">Kolejność dodania</option><option value="title">Tytuł A–Z</option><option value="artist">Wykonawca A–Z</option></select></label>
+                    </div>
                     <div id="favorites-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 overflow-y-auto max-h-[calc(100vh-200px)]">
                         <div class="text-slate-400 italic">Brak ulubionych utworów</div>
                     </div>
@@ -850,16 +889,38 @@
                         </button>
                     </div>
                     
+                    <div class="flex flex-wrap gap-3 mb-5">
+                        <input id="playlists-filter" type="search" placeholder="Filtruj playlisty" aria-label="Filtruj playlisty" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm flex-1 min-w-0">
+                        <label class="text-sm text-slate-300">Sortuj <select id="playlists-sort" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2"><option value="default">Kolejność dodania</option><option value="name">Nazwa A–Z</option><option value="size">Liczba utworów</option></select></label>
+                    </div>
                     <div id="playlists-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                         <div class="text-slate-400 italic">Brak playlist</div>
                     </div>
                 </div>
                 
+                <!-- Playback queue -->
+                <div id="queue-page" class="page-content hidden fade-in">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                        <h2 class="text-2xl font-bold">Kolejka odtwarzania</h2>
+                        <button id="clear-queue-button" type="button" class="text-slate-300 hover:text-white text-sm border border-slate-600 rounded-full px-4 py-2">Wyczyść kolejkę</button>
+                    </div>
+                    <p class="text-slate-400 text-sm mb-4">Zmieniaj kolejność i dodawaj utwory za pomocą przycisku kolejki. Kolejka i pozycja są zapamiętywane w tej karcie po odświeżeniu.</p>
+                    <div class="flex flex-wrap items-center gap-3 mb-6">
+                        <label for="sleep-timer" class="text-sm text-slate-300">Timer snu</label>
+                        <select id="sleep-timer" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm"><option value="0">Wyłączony</option><option value="15">15 minut</option><option value="30">30 minut</option><option value="60">60 minut</option><option value="90">90 minut</option></select>
+                        <span id="sleep-timer-status" class="text-slate-400 text-sm" role="status">Timer wyłączony</span>
+                    </div>
+                    <div id="queue-results" class="space-y-2 max-w-3xl" aria-live="polite"></div>
+                </div>
+
                 <!-- History Page -->
                 <div id="history-page" class="page-content hidden fade-in">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-2xl font-bold">Historia odtwarzania</h2>
-                        <div id="history-count" class="text-slate-400 text-sm"></div>
+                        <div class="flex items-center gap-3">
+                            <div id="history-count" class="text-slate-400 text-sm"></div>
+                            <button id="clear-history-button" type="button" class="text-slate-300 hover:text-red-400 text-sm">Wyczyść historię</button>
+                        </div>
                     </div>
                     
                     <div id="history-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -1006,6 +1067,6 @@
 
     <script defer src="/js/rejson-account.js?v=1"></script>
     <script defer src="ad-blocker.js?v=20261105"></script>
-    <script defer src="app.js?v=20261105"></script>
+    <script defer src="app.js?v=20261107"></script>
 </body>
 </html>
